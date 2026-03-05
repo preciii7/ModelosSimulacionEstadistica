@@ -1,29 +1,323 @@
 ---
-title: "Untitled"
-output: html_document
-date: "2026-03-03"
+title: "Informe Modelo de Regresión Lineal Múltiple"
+author: "Grupo 7"
+output:
+  html_document:
+    encoding: UTF-8
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+    code_folding : show
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+## Descripción del problema
+
+Maria comenzó como agente de bienes raíces en Cali hace 10 años. Después de laborar dos años para una empresa nacional, se traslado a Bogotá y trabajó para otra agencia de bienes raíces. Sus amigos y familiares la convencieron de que con su experiencia y conocimientos del negocio debía abrir su propia agencia. Terminó por adquirir la licencia de intermediario y al poco tiempo fundó su propia compañía, C&A (Casas y Apartamentos) en Cali. Santiago y Lina, dos vendedores de la empresa anterior aceptaron trabajar en la nueva compaña. En la actualidad ocho agentes de bienes raíces colaboran con ella en C&A.
+
+Actualmente las ventas de bienes raíces en Cali se han visto disminuidas de manera significativa en lo corrido del año. Durante este periodo muchas instituciones bancarias de ahorro y vivienda están prestando grandes sumas de dinero para la industria y la construcción comercial y residencial. Cuando el efecto producto de las tensiones políticas y sociales disminuya, se espera que la actividad económica de este sector se reactive.
+
+Hace dos días, María recibió una carta solicitando asesoría para la compra de dos viviendas por parte de una compañía internacional que desea ubicar a dos de sus empleados con sus familias en la ciudad. Las solicitudes incluyen las siguientes condiciones:
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+#Librerias a utilizar
+library(knitr)
+library(paqueteMODELOS)
+library(dplyr)
+library(leaflet)
+library(e1071)
+
+data("vivienda")
+
+tabla <- data.frame(
+  Caracteristicas = c("Tipo", "área construida", "parqueaderos", "baños",
+                      "habitaciones", "estrato", "zona", "crédito preaprobado"),
+  `Vivienda 1` = c("Casa", 200, 1, 2, 4, "4 o 5", "Norte", "350 millones"),
+  `Vivienda 2` = c("Apartamento", 300, 3, 3, 5, "5 o 6", "Sur", "850 millones"),
+  check.names = FALSE
+)
+
+kable(tabla, align = c("l","c","c"))
+```
+Ayude a María a responder la solicitud, mediante técnicas modelación que usted conoce. Ella requiere le envíe un informe ejecutivo donde analice los dos casos y sus recomendaciones (Informe). Como soporte del informe debe anexar las estimaciones, validaciones y comparación de modelos requeridos (Anexos) .
+
+## Datos
+
+Los datos de los tres últimos meses se adjuntan en la base que puede obtener con el siguiente código en R
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+tabla_variables_vivienda <- data.frame(
+  Nombre = c(
+    "id",
+    "zona",
+    "piso",
+    "estrato",
+    "preciom",
+    "areaconst",
+    "parqueaderos",
+    "banios",
+    "habitaciones",
+    "tipo",
+    "barrio",
+    "longitud",
+    "latitud"
+  ),
+  Descripcion = c(
+    "Identificador del registro",
+    "Ubicación de la vivienda (Zona Centro, Zona Norte, Zona Oriente, Zona Sur, ...)",
+    "Piso que ocupa la vivienda (primer piso, segundo piso, ...)",
+    "Estrato socio-económico (3, 4, 5, 6)",
+    "Precio de la vivienda en millones de pesos",
+    "Área construida",
+    "Número de parqueaderos",
+    "Número de baños",
+    "Número de habitaciones",
+    "Tipo de vivienda (Casa, Apartamento)",
+    "Barrio de ubicación de la vivienda",
+    "Coordenada geográfica",
+    "Coordenada geográfica"
+  ),
+  Categoria = c(
+    "Cualitativa nominal",
+    "Cualitativa nominal",
+    "Cualitativa ordinal",
+    "Cualitativa ordinal",
+    "Cuantitativa continua",
+    "Cuantitativa continua",
+    "Cuantitativa discreta",
+    "Cuantitativa discreta",
+    "Cuantitativa discreta",
+    "Cualitativa nominal",
+    "Cualitativa nominal",
+    "Cuantitativa continua",
+    "Cuantitativa continua"
+  ),
+  stringsAsFactors = FALSE
+)
+
+knitr::kable(tabla_variables_vivienda, caption = "Tabla 1. Descripción y tipo de variables del conjunto vivienda")
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Pasos requeridos para la obtención de los resultados
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+### Fase 1
 
-```{r cars}
-summary(cars)
+#### 1. Realice un filtro a la base de datos e incluya solo las ofertas de base1: casas, de la zona norte de la ciudad. Presente los primeros 3 registros de las bases y algunas tablas que comprueben la consulta. (Adicional un mapa con los puntos de las bases. Discutir si todos los puntos se ubican en la zona correspondiente o se presentan valores en otras zonas, por que?). 
+
+Si se hace el filtro tal cual se ve en la Fig. X, entonces no aparece ninguna fila
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+base1 <- vivienda %>%
+  filter(
+    zona == "Zona Norte",
+    areaconst == 200,
+    parqueaderos == 1,
+    banios == 2,
+    estrato %in% c(4, 5),
+    habitaciones == 4,
+    tipo == "Casa",
+    preciom <= 350
+  )
+
+# Cantidad de filas que cumplen con el filtro
+nrow(base1)
+```
+Si se toma al pie de la letra el enunciado, entonces se obtienen 722 filas:
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+base1 <- vivienda %>%
+  filter(
+    zona == "Zona Norte",          # ojo: en tu base aparece "Zona Norte"
+    tipo == "Casa"
+  )
+
+nrow(base1)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+knitr::kable(head(base1, 3), caption = "base1")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+base1_sur <- vivienda %>%
+  filter(
+    zona == "Zona Sur",
+    tipo == "Casa",
+  )
+
+
+map <- leaflet(base1) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~longitud,
+    lat = ~latitud,
+    radius = 5,
+    popup = ~paste0(
+      "<b>Zona:</b> ", zona, "<br>",
+      "<b>Tipo:</b> ", tipo, "<br>",
+      "<b>Precio:</b> ", preciom, "<br>",
+      "<b>Área:</b> ", areaconst, "<br>",
+      "<b>Habitaciones:</b> ", habitaciones, "<br>",
+      "<b>Baños:</b> ", banios, "<br>",
+      "<b>Parqueaderos:</b> ", parqueaderos
+    )
+  )
+
+map
+```
+
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+library(leaflet)
+library(dplyr)
+
+map <- leaflet() %>%
+  addTiles() %>%
+
+  # Zona Norte (azul)
+  addCircleMarkers(
+    data = base1 %>% filter(!is.na(longitud), !is.na(latitud)),
+    lng = ~longitud, lat = ~latitud,
+    radius = 5,
+    color = "blue", fillColor = "blue", fillOpacity = 0.8,
+    popup = ~paste0(
+      "<b>Zona:</b> ", zona, "<br>",
+      "<b>Tipo:</b> ", tipo, "<br>",
+      "<b>Precio:</b> ", preciom, "<br>",
+      "<b>Área:</b> ", areaconst, "<br>",
+      "<b>Habitaciones:</b> ", habitaciones, "<br>",
+      "<b>Baños:</b> ", banios, "<br>",
+      "<b>Parqueaderos:</b> ", parqueaderos, "<br><br>",
+      "<b>Lat:</b> ", latitud, "<br>",
+      "<b>Long:</b> ", longitud
+    ),
+    group = "Zona Norte"
+  ) %>%
+
+  # Zona Sur (rojo)
+  addCircleMarkers(
+    data = base1_sur %>% filter(!is.na(longitud), !is.na(latitud)),
+    lng = ~longitud, lat = ~latitud,
+    radius = 5,
+    color = "red", fillColor = "red", fillOpacity = 0.8,
+    popup = ~paste0(
+      "<b>Zona:</b> ", zona, "<br>",
+      "<b>Tipo:</b> ", tipo, "<br>",
+      "<b>Precio:</b> ", preciom, "<br>",
+      "<b>Área:</b> ", areaconst, "<br>",
+      "<b>Habitaciones:</b> ", habitaciones, "<br>",
+      "<b>Baños:</b> ", banios, "<br>",
+      "<b>Parqueaderos:</b> ", parqueaderos, "<br><br>",
+      "<b>Lat:</b> ", latitud, "<br>",
+      "<b>Long:</b> ", longitud
+    ),
+    group = "Zona Sur"
+  ) %>%
+
+  addLayersControl(
+    overlayGroups = c("Zona Norte", "Zona Sur"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+map
+```
+
+#### 2. Realice un análisis exploratorio de datos enfocado en la correlación entre la variable respuesta (precio de la casa) en función del área construida, estrato, numero de baños, numero de habitaciones y zona donde se ubica la vivienda. Use gráficos interactivos con el paquete `plotly` e interprete los resultados.
+
+##### Analisis Exploratorio de datos
+
+###### Variables cuantitativas
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+cols <- c("preciom", "areaconst","banios","habitaciones")
+# Separar numéricas vs categóricas
+cols_num <- cols[sapply(vivienda[, cols, drop = FALSE], is.numeric)]
+
+tabla_desc <- data.frame(
+  Variable = cols_num,
+  Mínimo   = sapply(vivienda[, cols_num, drop = FALSE], function(x) min(x, na.rm = TRUE)),
+  Máximo   = sapply(vivienda[, cols_num, drop = FALSE], function(x) max(x, na.rm = TRUE)),
+  Mediana  = sapply(vivienda[, cols_num, drop = FALSE], function(x) median(x, na.rm = TRUE)),
+  Media    = sapply(vivienda[, cols_num, drop = FALSE], function(x) mean(x, na.rm = TRUE)),
+  `Desviación estándar` = sapply(vivienda[, cols_num, drop = FALSE], function(x) sd(x, na.rm = TRUE)),
+  `Coef. de variación (%)` = sapply(vivienda[, cols_num, drop = FALSE], function(x) {
+    m <- mean(x, na.rm = TRUE); s <- sd(x, na.rm = TRUE)
+    if (is.na(m) || m == 0) NA_real_ else (s/m) * 100
+  }),
+  `Primer cuartil` = sapply(vivienda[, cols_num, drop = FALSE], function(x) quantile(x, 0.25, na.rm = TRUE, type = 7)),
+  `Tercer cuartil` = sapply(vivienda[, cols_num, drop = FALSE], function(x) quantile(x, 0.75, na.rm = TRUE, type = 7)),
+  Asimetría = sapply(vivienda[, cols_num, drop = FALSE], function(x) e1071::skewness(x, na.rm = TRUE, type = 2)),
+  Curtosis  = sapply(vivienda[, cols_num, drop = FALSE], function(x) e1071::kurtosis(x, na.rm = TRUE, type = 2)) - 3
+)
+
+# Redondear (ajusta si quieres)
+tabla_desc <- tabla_desc %>%
+  mutate(across(-Variable, ~round(.x, 2)))
+
+kable(tabla_desc, caption = "Estadísticos descriptivos (variables numéricas)")
+```
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+cols <- c("preciom", "areaconst","banios","habitaciones")
+
+library(dplyr)
+library(plotly)
+
+cols_num <- cols[sapply(vivienda[, cols, drop = FALSE], is.numeric)]
+n_bins <- 30
+
+plots <- lapply(cols_num, function(v) {
+  x <- vivienda[[v]]
+  x <- x[!is.na(x)]
+
+  plot_ly(
+    x = x,
+    type = "histogram",
+    nbinsx = n_bins,
+    showlegend = FALSE
+  ) %>%
+    layout(
+      # este margen deja espacio para el título dentro del panel
+      margin = list(t = 40),
+      xaxis = list(title = ""),
+      yaxis = list(title = "Frecuencia"),
+      # TÍTULO DEL PANEL (anotación)
+      annotations = list(list(
+        text = v,
+        x = 0.5, y = 1.12,
+        xref = "paper", yref = "paper",
+        showarrow = FALSE,
+        xanchor = "center",
+        font = list(size = 14)
+      ))
+    )
+})
+
+subplot(
+  plots,
+  nrows = ceiling(length(plots) / 2),
+  shareX = FALSE, shareY = FALSE
+)
+```
+
+##### Valores faltantes
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+  cols <- c("preciom", "areaconst", "estrato","banios","habitaciones","zona")
+
+tabla_na <- data.frame(
+  columna = cols,
+  n    = sapply(vivienda[, cols, drop = FALSE], function(x) sum(is.na(x))),
+  porcentaje_na  = round(sapply(vivienda[, cols, drop = FALSE], function(x) mean(is.na(x)) * 100), 2)
+)
+
+# opcional: ordenar de mayor a menor % faltante
+tabla_na <- tabla_na[order(-tabla_na$porcentaje_na), ]
+
+knitr::kable(tabla_na, caption = "Faltantes por columna (n y %)")
+```
+
+De la Tabla X, se puede mirar que el porcentaje de NA son menores al 5% 
