@@ -25,9 +25,13 @@ Hace dos días, María recibió una carta solicitando asesoría para la compra d
 #Librerias a utilizar
 library(knitr)
 library(paqueteMODELOS)
+library(plotly)
 library(dplyr)
 library(leaflet)
 library(e1071)
+library(stringr)
+library(stringi)
+library(tidyr)
 
 data("vivienda")
 
@@ -172,8 +176,7 @@ map
 
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
-library(leaflet)
-library(dplyr)
+
 
 map <- leaflet() %>%
   addTiles() %>%
@@ -226,51 +229,144 @@ map <- leaflet() %>%
 map
 ```
 
+
+Teniendo en cuenta que en el punto anterior se mostro que hay muchos puntos de zona norte que no estan en la zona norte, entonces se decidio cambiar algunos puntos de zona para corregirlo que se hara con las latitudes. El limite entre zona norte y centro sera a partir de la latitud 3.449. Lo mismo para zona centro y zona Sur a partir de la latitud 3.43242.  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+vivienda <- vivienda %>%
+  mutate(
+    zona = case_when(
+      is.na(latitud) ~ NA_character_,
+      latitud >= 3.449 ~ "Zona Norte",
+      latitud >= 3.43242 ~ "Zona Centro",
+      TRUE ~ "Zona Sur"
+    )
+  )
+
+vivienda <- vivienda %>%
+  mutate(zona_clean = str_to_lower(str_squish(zona)))
+
+map <- leaflet() %>%
+  addTiles() %>%
+
+  addCircleMarkers(
+    data = vivienda %>% filter(zona_clean == "zona norte", !is.na(longitud), !is.na(latitud)),
+    lng = ~longitud, lat = ~latitud,
+    radius = 5, color = "blue", fillColor = "blue", fillOpacity = 0.8,
+    popup = ~paste0(
+      "<b>Zona:</b> ", zona, "<br>",
+      "<b>Tipo:</b> ", tipo, "<br>",
+      "<b>Precio:</b> ", preciom, "<br>",
+      "<b>Área:</b> ", areaconst, "<br>",
+      "<b>Habitaciones:</b> ", habitaciones, "<br>",
+      "<b>Baños:</b> ", banios, "<br>",
+      "<b>Parqueaderos:</b> ", parqueaderos, "<br><br>",
+      "<b>Lat:</b> ", latitud, "<br>",
+      "<b>Long:</b> ", longitud
+    ),
+    group = "Zona Norte"
+  ) %>%
+
+  addCircleMarkers(
+    data = vivienda %>% filter(zona_clean == "zona centro", !is.na(longitud), !is.na(latitud)),
+    lng = ~longitud, lat = ~latitud,
+    radius = 5, color = "green", fillColor = "green", fillOpacity = 0.8,
+    popup = ~paste0(
+      "<b>Zona:</b> ", zona, "<br>",
+      "<b>Tipo:</b> ", tipo, "<br>",
+      "<b>Precio:</b> ", preciom, "<br>",
+      "<b>Área:</b> ", areaconst, "<br>",
+      "<b>Habitaciones:</b> ", habitaciones, "<br>",
+      "<b>Baños:</b> ", banios, "<br>",
+      "<b>Parqueaderos:</b> ", parqueaderos, "<br><br>",
+      "<b>Lat:</b> ", latitud, "<br>",
+      "<b>Long:</b> ", longitud
+    ),
+    group = "Zona Centro"
+  ) %>%
+
+  addCircleMarkers(
+    data = vivienda %>% filter(zona_clean == "zona sur", !is.na(longitud), !is.na(latitud)),
+    lng = ~longitud, lat = ~latitud,
+    radius = 5, color = "red", fillColor = "red", fillOpacity = 0.8,
+    popup = ~paste0(
+      "<b>Zona:</b> ", zona, "<br>",
+      "<b>Tipo:</b> ", tipo, "<br>",
+      "<b>Precio:</b> ", preciom, "<br>",
+      "<b>Área:</b> ", areaconst, "<br>",
+      "<b>Habitaciones:</b> ", habitaciones, "<br>",
+      "<b>Baños:</b> ", banios, "<br>",
+      "<b>Parqueaderos:</b> ", parqueaderos, "<br><br>",
+      "<b>Lat:</b> ", latitud, "<br>",
+      "<b>Long:</b> ", longitud
+    ),
+    group = "Zona Sur"
+  ) %>%
+
+  addLayersControl(
+    overlayGroups = c("Zona Norte", "Zona Centro", "Zona Sur"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+map
+```
+
+
+
 #### 2. Realice un análisis exploratorio de datos enfocado en la correlación entre la variable respuesta (precio de la casa) en función del área construida, estrato, numero de baños, numero de habitaciones y zona donde se ubica la vivienda. Use gráficos interactivos con el paquete `plotly` e interprete los resultados.
 
 ##### Analisis Exploratorio de datos
 
 ###### Variables cuantitativas
 
+Eliminamos los datos repetidos para que solo quede la primera aparición.
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+duplicados <- duplicated(vivienda)
+vivienda <- vivienda[!duplicados, ]
+```
+
+Procedemos a hacer estadistica descriptiva con los datos y obtenemos que
+
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
 cols <- c("preciom", "areaconst","banios","habitaciones")
 # Separar numéricas vs categóricas
-cols_num <- cols[sapply(vivienda[, cols, drop = FALSE], is.numeric)]
+cols_num <- cols[sapply(base1[, cols, drop = FALSE], is.numeric)]
 
 tabla_desc <- data.frame(
   Variable = cols_num,
-  Mínimo   = sapply(vivienda[, cols_num, drop = FALSE], function(x) min(x, na.rm = TRUE)),
-  Máximo   = sapply(vivienda[, cols_num, drop = FALSE], function(x) max(x, na.rm = TRUE)),
-  Mediana  = sapply(vivienda[, cols_num, drop = FALSE], function(x) median(x, na.rm = TRUE)),
-  Media    = sapply(vivienda[, cols_num, drop = FALSE], function(x) mean(x, na.rm = TRUE)),
-  `Desviación estándar` = sapply(vivienda[, cols_num, drop = FALSE], function(x) sd(x, na.rm = TRUE)),
-  `Coef. de variación (%)` = sapply(vivienda[, cols_num, drop = FALSE], function(x) {
+  Mínimo   = sapply(base1[, cols_num, drop = FALSE], function(x) min(x, na.rm = TRUE)),
+  Máximo   = sapply(base1[, cols_num, drop = FALSE], function(x) max(x, na.rm = TRUE)),
+  Mediana  = sapply(base1[, cols_num, drop = FALSE], function(x) median(x, na.rm = TRUE)),
+  Media    = sapply(base1[, cols_num, drop = FALSE], function(x) mean(x, na.rm = TRUE)),
+  `Desviación estándar` = sapply(base1[, cols_num, drop = FALSE], function(x) sd(x, na.rm = TRUE)),
+  `Coef. de variación (%)` = sapply(base1[, cols_num, drop = FALSE], function(x) {
     m <- mean(x, na.rm = TRUE); s <- sd(x, na.rm = TRUE)
     if (is.na(m) || m == 0) NA_real_ else (s/m) * 100
   }),
-  `Primer cuartil` = sapply(vivienda[, cols_num, drop = FALSE], function(x) quantile(x, 0.25, na.rm = TRUE, type = 7)),
-  `Tercer cuartil` = sapply(vivienda[, cols_num, drop = FALSE], function(x) quantile(x, 0.75, na.rm = TRUE, type = 7)),
-  Asimetría = sapply(vivienda[, cols_num, drop = FALSE], function(x) e1071::skewness(x, na.rm = TRUE, type = 2)),
-  Curtosis  = sapply(vivienda[, cols_num, drop = FALSE], function(x) e1071::kurtosis(x, na.rm = TRUE, type = 2)) - 3
+  `Primer cuartil` = sapply(base1[, cols_num, drop = FALSE], function(x) quantile(x, 0.25, na.rm = TRUE, type = 7)),
+  `Tercer cuartil` = sapply(base1[, cols_num, drop = FALSE], function(x) quantile(x, 0.75, na.rm = TRUE, type = 7)),
+  Asimetría = sapply(base1[, cols_num, drop = FALSE], function(x) e1071::skewness(x, na.rm = TRUE, type = 2)),
+  Curtosis  = sapply(base1[, cols_num, drop = FALSE], function(x) e1071::kurtosis(x, na.rm = TRUE, type = 2)) - 3
 )
 
 # Redondear (ajusta si quieres)
 tabla_desc <- tabla_desc %>%
-  mutate(across(-Variable, ~round(.x, 2)))
+  dplyr::mutate(dplyr::across(-Variable, ~round(.x, 2)))
 
-kable(tabla_desc, caption = "Estadísticos descriptivos (variables numéricas)")
+knitr::kable(tabla_desc, caption = "Estadísticos descriptivos (variables numéricas)")
 ```
+
+
+
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
 cols <- c("preciom", "areaconst","banios","habitaciones")
 
-library(dplyr)
-library(plotly)
-
-cols_num <- cols[sapply(vivienda[, cols, drop = FALSE], is.numeric)]
+cols_num <- cols[sapply(base1[, cols, drop = FALSE], is.numeric)]
 n_bins <- 30
 
 plots <- lapply(cols_num, function(v) {
-  x <- vivienda[[v]]
+  x <- base1[[v]]
   x <- x[!is.na(x)]
 
   plot_ly(
@@ -280,11 +376,9 @@ plots <- lapply(cols_num, function(v) {
     showlegend = FALSE
   ) %>%
     layout(
-      # este margen deja espacio para el título dentro del panel
       margin = list(t = 40),
       xaxis = list(title = ""),
       yaxis = list(title = "Frecuencia"),
-      # TÍTULO DEL PANEL (anotación)
       annotations = list(list(
         text = v,
         x = 0.5, y = 1.12,
@@ -303,7 +397,131 @@ subplot(
 )
 ```
 
-##### Valores faltantes
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+
+p1 <- plot_ly(base1, y = ~preciom, type = "box", name = "preciom")
+p2 <- plot_ly(base1, y = ~areaconst, type = "box", name = "areaconst")
+p3 <- plot_ly(base1, y = ~banios, type = "box", name = "banios")
+p4 <- plot_ly(base1, y = ~habitaciones, type = "box", name = "habitaciones")
+
+subplot(p1, p2, p3, p4, nrows = 2, shareX = FALSE, shareY = FALSE) %>%
+  layout(title = "Boxplots por variable (2x2)")
+```
+###### Variables cualitativas
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# Conteos para estrato
+estrato_counts <- base1 %>%
+  filter(!is.na(estrato)) %>%
+  count(estrato) %>%
+  mutate(estrato = as.factor(estrato)) %>%
+  arrange(estrato)
+
+p_estrato <- plot_ly(
+  estrato_counts,
+  x = ~estrato, y = ~n,
+  type = "bar",
+  showlegend = FALSE
+) %>%
+  layout(
+    title = "Frecuencia por estrato (base1)",
+    xaxis = list(title = "Estrato"),
+    yaxis = list(title = "Frecuencia")
+  )
+
+# Conteos para parqueaderos
+parq_counts <- base1 %>%
+  filter(!is.na(parqueaderos)) %>%
+  count(parqueaderos) %>%
+  mutate(parqueaderos = as.factor(parqueaderos)) %>%
+  arrange(parqueaderos)
+
+p_parq <- plot_ly(
+  parq_counts,
+  x = ~parqueaderos, y = ~n,
+  type = "bar",
+  showlegend = FALSE
+) %>%
+  layout(
+    title = "Frecuencia por número de parqueaderos (base1)",
+    xaxis = list(title = "Parqueaderos"),
+    yaxis = list(title = "Frecuencia")
+  )
+
+subplot(p_estrato, p_parq, nrows = 1, shareY = FALSE) %>%
+  layout(title = "Gráficos de barras: estrato y parqueaderos (base1)")
+
+```
+
+
+##### Valores atipicos 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+vars_num <- c("preciom", "areaconst", "banios", "habitaciones")
+
+# 2) Función para calcular outliers por IQR (IRC)
+outliers_iqr <- function(x, k = 1.5) {
+  x_no_na <- x[!is.na(x)]
+  q1 <- as.numeric(quantile(x_no_na, 0.25, type = 7))
+  q3 <- as.numeric(quantile(x_no_na, 0.75, type = 7))
+  iqr <- q3 - q1
+  li <- q1 - k * iqr
+  ls <- q3 + k * iqr
+  
+  list(q1 = q1, q3 = q3, iqr = iqr, li = li, ls = ls)
+}
+
+# 3) Resumen por variable (límites y cantidad de atípicos)
+resumen_atipicos <- lapply(vars_num, function(v) {
+  x <- base1[[v]]
+  stats <- outliers_iqr(x, k = 1.5)
+  
+  idx <- which(!is.na(x) & (x < stats$li | x > stats$ls))
+  
+  data.frame(
+    Variable = v,
+    N = sum(!is.na(x)),
+    Q1 = stats$q1,
+    Q3 = stats$q3,
+    IQR = stats$iqr,
+    Limite_inferior = stats$li,
+    Limite_superior = stats$ls,
+    N_atipicos = length(idx),
+    Porc_atipicos = ifelse(sum(!is.na(x)) == 0, NA_real_, 100 * length(idx)/sum(!is.na(x)))
+  )
+}) %>% bind_rows() %>%
+  mutate(across(where(is.numeric), ~round(.x, 2))) %>%
+  arrange(desc(N_atipicos))
+
+# 4) Tabla con el detalle: fila, variable y valor atípico
+detalle_atipicos <- base1 %>%
+  mutate(.fila = row_number()) %>%
+  select(.fila, all_of(vars_num)) %>%
+  pivot_longer(cols = all_of(vars_num), names_to = "Variable", values_to = "Valor") %>%
+  group_by(Variable) %>%
+  mutate(
+    Q1 = quantile(Valor, 0.25, na.rm = TRUE, type = 7),
+    Q3 = quantile(Valor, 0.75, na.rm = TRUE, type = 7),
+    IQR = Q3 - Q1,
+    LI = Q1 - 1.5 * IQR,
+    LS = Q3 + 1.5 * IQR,
+    Es_atipico = !is.na(Valor) & (Valor < LI | Valor > LS)
+  ) %>%
+  ungroup() %>%
+  filter(Es_atipico) %>%
+  select(.fila, Variable, Valor, LI, LS) %>%
+  arrange(Variable, Valor)
+
+# Mostrar resultados
+knitr::kable(resumen_atipicos, caption = "Outliers por IQR (IRC) - Resumen")
+# knitr::kable(detalle_atipicos, caption = "Outliers por IQR (IRC) - Detalle")
+```
+
+Con la Tabla X con el criterio del rango intercuartílico (IQR/IRC, k = 1.5) se identificaron observaciones que quedan por fuera del intervalo ([Q1 - 1.5 IQR,; Q3 + 1.5 IQR]). En total se analizaron 722 registros válidos por variable y el porcentaje de valores atípicos fue bajo–moderado (entre aprox. 2% y aprox.4%). La variable precio (preciom) presentó la mayor proporción de atípicos (31 casos; 4.29%); con Q1 = 261.25 y Q3 = 550 (IQR = 288.75), el límite superior se ubicó en 983.12, lo que sugiere que los atípicos corresponden principalmente a inmuebles considerablemente más costosos que el resto; el límite inferior resultó negativo (-171.88), sin interpretación económica, por lo que es esperable que la mayoría de atípicos se concentren en valores altos. En habitaciones se detectaron 27 atípicos (3.74%), con límites entre 0 y 8, lo cual suele asociarse a inmuebles con un número inusualmente alto de habitaciones o, en casos puntuales, a posibles inconsistencias en el registro. Para área construida (areaconst) se identificaron 26 atípicos (3.60%) con límite superior de 631.88; al igual que en precio, el límite inferior fue negativo (-155.12), indicando que los atípicos corresponden casi con seguridad a áreas muy grandes, típicas de propiedades fuera del “promedio” del mercado. Finalmente, baños (banios) fue la variable con menos atípicos (14; 1.94%), con límites entre -1 y 7, por lo que los casos relevantes se ubican principalmente en valores altos (más de 7 baños). En conjunto, los atípicos parecen responder a una cola superior (valores altos) y no necesariamente a errores, algo común en datos inmobiliarios donde existen inmuebles “premium” o de gran tamaño. Por lo que se considera hacer transformaciones logaritmicas en precio y areaconst, en el siguiente paso, en lugar de eliminar los valores atipicos, especialmente si se busca modelar precios.
+
+##### Valores faltantes e imputación
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
   cols <- c("preciom", "areaconst", "estrato","banios","habitaciones","zona")
@@ -320,4 +538,61 @@ tabla_na <- tabla_na[order(-tabla_na$porcentaje_na), ]
 knitr::kable(tabla_na, caption = "Faltantes por columna (n y %)")
 ```
 
-De la Tabla X, se puede mirar que el porcentaje de NA son menores al 5% 
+De la Tabla X, se puede mirar que el porcentaje de NA son menores al 5% por lo que primero se va a separar el codigo entre train (80% de los datos) y test (20%). 
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+set.seed(123)
+
+# 1) Partición 80/20
+n <- nrow(base1)
+idx_train <- sample(seq_len(n), size = floor(0.8 * n))
+
+train <- base1[idx_train, ]
+test  <- base1[-idx_train, ]
+
+# 1) Log de precio (respuesta)
+train <- train %>% mutate(log_preciom = log(preciom))
+test  <- test  %>% mutate(log_preciom = log(preciom))
+
+# 2) Imputación aprendida en train
+num_vars <- c("areaconst","banios","habitaciones","parqueaderos","estrato")
+cat_vars <- c("zona")
+
+# Imputacion cuantitativas Medianas numéricas (train)
+medianas <- sapply(train[, num_vars], \(x) median(x, na.rm = TRUE))
+
+for(v in num_vars){
+  train[[v]][is.na(train[[v]])] <- medianas[[v]]
+  test[[v]][is.na(test[[v]])]   <- medianas[[v]]
+}
+
+# Moda categórica (train)
+moda <- function(x){
+  x <- x[!is.na(x)]
+  names(sort(table(x), decreasing = TRUE))[1]
+}
+modas <- sapply(train[, cat_vars, drop=FALSE], moda)
+
+for(v in cat_vars){
+  train[[v]][is.na(train[[v]])] <- modas[[v]]
+  test[[v]][is.na(test[[v]])]   <- modas[[v]]
+}
+
+```
+
+#### 3. Estime un modelo de regresión lineal múltiple con las variables del punto anterior (precio = f(área construida, estrato, número de cuartos, número de parqueaderos, número de baños ) ) e interprete los coeficientes si son estadísticamente significativos. Las interpretaciones deber están contextualizadas y discutir si los resultados son lógicos. Adicionalmente interprete el coeficiente R^2 y discuta el ajuste del modelo e implicaciones (que podrían hacer para mejorarlo).
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+# Asegura estrato como numérica
+train$estrato <- as.numeric(as.character(train$estrato))
+test$estrato  <- as.numeric(as.character(test$estrato))
+
+# Modelo múltiple (en escala original)
+m1 <- lm(preciom ~ areaconst + estrato + habitaciones + parqueaderos + banios, data = train)
+summary(m1)
+
+```
+
+##### Interpretacion de los coeficientes
+
+- 
