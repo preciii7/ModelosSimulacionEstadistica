@@ -32,6 +32,8 @@ library(e1071)
 library(stringr)
 library(stringi)
 library(tidyr)
+library(fBasics)
+library(lmtest)
 
 data("vivienda")
 
@@ -107,9 +109,7 @@ knitr::kable(tabla_variables_vivienda, caption = "Tabla 1. Descripción y tipo d
 
 ## Pasos requeridos para la obtención de los resultados
 
-### Fase 1
-
-#### 1. Realice un filtro a la base de datos e incluya solo las ofertas de base1: casas, de la zona norte de la ciudad. Presente los primeros 3 registros de las bases y algunas tablas que comprueben la consulta. (Adicional un mapa con los puntos de las bases. Discutir si todos los puntos se ubican en la zona correspondiente o se presentan valores en otras zonas, por que?). 
+### Base1:Paso 1
 
 Si se hace el filtro tal cual se ve en la Fig. X, entonces no aparece ninguna fila
 
@@ -314,11 +314,9 @@ map
 
 
 
-#### 2. Realice un análisis exploratorio de datos enfocado en la correlación entre la variable respuesta (precio de la casa) en función del área construida, estrato, numero de baños, numero de habitaciones y zona donde se ubica la vivienda. Use gráficos interactivos con el paquete `plotly` e interprete los resultados.
+### Base1:Paso 2
 
-##### Analisis Exploratorio de datos
-
-###### Variables cuantitativas
+#### Variables cuantitativas
 
 Eliminamos los datos repetidos para que solo quede la primera aparición.
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
@@ -407,7 +405,7 @@ p4 <- plot_ly(base1, y = ~habitaciones, type = "box", name = "habitaciones")
 subplot(p1, p2, p3, p4, nrows = 2, shareX = FALSE, shareY = FALSE) %>%
   layout(title = "Boxplots por variable (2x2)")
 ```
-###### Variables cualitativas
+#### Variables cualitativas
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 
@@ -455,7 +453,7 @@ subplot(p_estrato, p_parq, nrows = 1, shareY = FALSE) %>%
 ```
 
 
-##### Valores atipicos 
+#### Valores atipicos 
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 
@@ -469,17 +467,15 @@ outliers_iqr <- function(x, k = 1.5) {
   iqr <- q3 - q1
   li <- q1 - k * iqr
   ls <- q3 + k * iqr
-  
   list(q1 = q1, q3 = q3, iqr = iqr, li = li, ls = ls)
 }
 
-# 3) Resumen por variable (límites y cantidad de atípicos)
+# 3) Resumen por variable
 resumen_atipicos <- lapply(vars_num, function(v) {
   x <- base1[[v]]
   stats <- outliers_iqr(x, k = 1.5)
-  
   idx <- which(!is.na(x) & (x < stats$li | x > stats$ls))
-  
+
   data.frame(
     Variable = v,
     N = sum(!is.na(x)),
@@ -489,39 +485,20 @@ resumen_atipicos <- lapply(vars_num, function(v) {
     Limite_inferior = stats$li,
     Limite_superior = stats$ls,
     N_atipicos = length(idx),
-    Porc_atipicos = ifelse(sum(!is.na(x)) == 0, NA_real_, 100 * length(idx)/sum(!is.na(x)))
+    Porc_atipicos = ifelse(sum(!is.na(x)) == 0, NA_real_, 100 * length(idx) / sum(!is.na(x)))
   )
-}) %>% bind_rows() %>%
-  mutate(across(where(is.numeric), ~round(.x, 2))) %>%
-  arrange(desc(N_atipicos))
+}) %>%
+  dplyr::bind_rows() %>%
+  dplyr::mutate(dplyr::across(dplyr::where(is.numeric), ~round(.x, 2))) %>%
+  dplyr::arrange(dplyr::desc(N_atipicos))
 
-# 4) Tabla con el detalle: fila, variable y valor atípico
-detalle_atipicos <- base1 %>%
-  mutate(.fila = row_number()) %>%
-  select(.fila, all_of(vars_num)) %>%
-  pivot_longer(cols = all_of(vars_num), names_to = "Variable", values_to = "Valor") %>%
-  group_by(Variable) %>%
-  mutate(
-    Q1 = quantile(Valor, 0.25, na.rm = TRUE, type = 7),
-    Q3 = quantile(Valor, 0.75, na.rm = TRUE, type = 7),
-    IQR = Q3 - Q1,
-    LI = Q1 - 1.5 * IQR,
-    LS = Q3 + 1.5 * IQR,
-    Es_atipico = !is.na(Valor) & (Valor < LI | Valor > LS)
-  ) %>%
-  ungroup() %>%
-  filter(Es_atipico) %>%
-  select(.fila, Variable, Valor, LI, LS) %>%
-  arrange(Variable, Valor)
-
-# Mostrar resultados
+# Mostrar tablas
 knitr::kable(resumen_atipicos, caption = "Outliers por IQR (IRC) - Resumen")
-# knitr::kable(detalle_atipicos, caption = "Outliers por IQR (IRC) - Detalle")
 ```
 
 Con la Tabla X con el criterio del rango intercuartílico (IQR/IRC, k = 1.5) se identificaron observaciones que quedan por fuera del intervalo ([Q1 - 1.5 IQR,; Q3 + 1.5 IQR]). En total se analizaron 722 registros válidos por variable y el porcentaje de valores atípicos fue bajo–moderado (entre aprox. 2% y aprox.4%). La variable precio (preciom) presentó la mayor proporción de atípicos (31 casos; 4.29%); con Q1 = 261.25 y Q3 = 550 (IQR = 288.75), el límite superior se ubicó en 983.12, lo que sugiere que los atípicos corresponden principalmente a inmuebles considerablemente más costosos que el resto; el límite inferior resultó negativo (-171.88), sin interpretación económica, por lo que es esperable que la mayoría de atípicos se concentren en valores altos. En habitaciones se detectaron 27 atípicos (3.74%), con límites entre 0 y 8, lo cual suele asociarse a inmuebles con un número inusualmente alto de habitaciones o, en casos puntuales, a posibles inconsistencias en el registro. Para área construida (areaconst) se identificaron 26 atípicos (3.60%) con límite superior de 631.88; al igual que en precio, el límite inferior fue negativo (-155.12), indicando que los atípicos corresponden casi con seguridad a áreas muy grandes, típicas de propiedades fuera del “promedio” del mercado. Finalmente, baños (banios) fue la variable con menos atípicos (14; 1.94%), con límites entre -1 y 7, por lo que los casos relevantes se ubican principalmente en valores altos (más de 7 baños). En conjunto, los atípicos parecen responder a una cola superior (valores altos) y no necesariamente a errores, algo común en datos inmobiliarios donde existen inmuebles “premium” o de gran tamaño. Por lo que se considera hacer transformaciones logaritmicas en precio y areaconst, en el siguiente paso, en lugar de eliminar los valores atipicos, especialmente si se busca modelar precios.
 
-##### Valores faltantes e imputación
+#### Valores faltantes e imputación
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
   cols <- c("preciom", "areaconst", "estrato","banios","habitaciones","zona")
@@ -580,19 +557,327 @@ for(v in cat_vars){
 
 ```
 
-#### 3. Estime un modelo de regresión lineal múltiple con las variables del punto anterior (precio = f(área construida, estrato, número de cuartos, número de parqueaderos, número de baños ) ) e interprete los coeficientes si son estadísticamente significativos. Las interpretaciones deber están contextualizadas y discutir si los resultados son lógicos. Adicionalmente interprete el coeficiente R^2 y discuta el ajuste del modelo e implicaciones (que podrían hacer para mejorarlo).
+### Base1:Paso 3
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
 # Asegura estrato como numérica
-train$estrato <- as.numeric(as.character(train$estrato))
-test$estrato  <- as.numeric(as.character(test$estrato))
+train$estrato <- as.factor(train$estrato)
+test$estrato  <- as.factor(test$estrato)
 
 # Modelo múltiple (en escala original)
-m1 <- lm(preciom ~ areaconst + estrato + habitaciones + parqueaderos + banios, data = train)
+m1 <- lm(preciom ~ areaconst + factor(estrato) + habitaciones + parqueaderos + banios, data = train)
 summary(m1)
 
 ```
 
-##### Interpretacion de los coeficientes
+#### Interpretacion de los coeficientes
 
-- 
+
+
+#### Discusion del ajuste e implicaciones
+
+### Base1:Paso 4
+
+#### Normalidad de los errores
+
+El supuesto de normalidad de los residuos se plantea como:
+
+$$
+H_0:\ \varepsilon_i \sim N(0,\sigma^2) \qquad \text{(los residuos siguen una distribución normal)}
+$$
+
+
+
+$$
+H_1:\ \varepsilon_i \ \text{no siguen una distribución normal}
+$$
+
+Bajo la hipótesis nula ($H_0$), los residuos del modelo provienen de una distribución normal, por lo que el supuesto se cumple. En cambio, si se rechaza $H_0$ (por ejemplo, mediante el test de normalidad de D’Agostino con $p < 0.05$), se concluye que los residuos no son normales y, por lo tanto, el supuesto de normalidad no se cumple.
+
+Para evaluar este supuesto, se utiliza el QQ-Plot de los residuos estandarizados (comparando los cuantiles empíricos con los cuantiles teóricos normales) y un histograma de los residuos. Posteriormente, se complementa la evaluación visual con el test de D’Agostino (`dagotest`) aplicado a los residuos del modelo.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+## Normalidad de los errores (residuos) del modelo m1
+
+# 1) Residuos y residuos estandarizados
+residuos <- residuals(m1)
+residuales_estandarizados <- rstandard(m1)
+
+# 2) QQ-Plot
+par(mfrow = c(1,1))
+par(mar = c(5, 4, 3, 1))
+
+qqnorm(residuales_estandarizados,
+       main = "QQ-Plot de los residuales estandarizados",
+       col = "blue")
+qqline(residuales_estandarizados, col = "red", lwd = 2)
+
+# 3) Histograma de residuos con curva normal ajustada
+hist(residuos, breaks = 50, freq = FALSE, col = "lightblue",
+     main = "Histograma de los residuos", xlab = "Residuos")
+
+curve(dnorm(x, mean = mean(residuos, na.rm = TRUE), sd = sd(residuos, na.rm = TRUE)),
+      col = "red", lwd = 2, add = TRUE)
+
+
+```
+
+En el QQ-plot se observa que los residuos se alinean razonablemente bien con la recta teórica en la zona central, lo que sugiere un comportamiento aproximadamente normal alrededor de la media. Sin embargo, en los extremos los puntos se apartan claramente de la línea (especialmente en la cola derecha), indicando colas más pesadas y cierta asimetría. El histograma refuerza esta idea: la forma general es similar a una campana, pero aparecen valores extremos y una cola derecha larga, por lo que el supuesto de normalidad se cumple solo de manera parcial. Esto no invalida automáticamente el modelo, pero conviene considerarlo al interpretar pruebas de significancia (p-values), ya que la inferencia clásica puede verse afectada cuando hay colas pesadas. Para confirmar formalmente la normalidad, se complementa la inspección visual con un test más sensible a colas (por ejemplo, Anderson–Darling o D’Agostino), que suele detectar este tipo de desviaciones.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+
+# 4) Test de normalidad de D'Agostino
+# H0: residuos ~ Normal
+# H1: residuos no ~ Normal
+fBasics::dagoTest(residuos)
+```
+
+El test de Anderson-Darling me arroja un p-value<0.05, rechazando la hipótesis nula. Esto quiere decir, que los residuos no siguen una distribución normal. Aunque los residuos no presentan normalidad, esto no invalida por completo el modelo. Como mejora, se recomienda probar transformaciones logarítmicas en el precio y en el área construida, revisar observaciones atípicas e influyentes, incluir variables adicionales de localización y explorar relaciones no lineales o interacciones. Si el objetivo principal es predecir, el modelo aún puede ser útil, pero para la inferencia estadística conviene apoyarse en métodos robustos.
+
+#### Los errores tienen media E[e]=0
+
+Se utiliza t-test de una muestra, para contrastar la formulacion de las hipótesis:
+$$
+H_0: \mu = 0 \qquad \text{(la media de los residuos es cero)}
+$$
+
+
+
+$$
+H_1: \mu \neq 0 \qquad \text{(la media de los residuos difiere de cero)}
+$$
+Antes del test, se visualiza la distribución de los residuos para tener una estimacion de su comportamiento y verificar si estan centrados en cero.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+plot(residuos, type = "p", col = "blue",
+     main = "Residuos vs Observaciones",
+     ylab = "Residuos", xlab = "Índice")
+abline(h = 0, col = "red", lwd = 2)
+```
+
+El gráfico de residuos vs observaciones muestra que los errores se distribuyen alrededor de cero sin un patrón sistemático evidente, lo que sugiere que el modelo no presenta un sesgo claro. No obstante, se observan algunos residuos extremos y una dispersión algo irregular en ciertos sectores, lo que podría indicar la presencia de observaciones atípicas y posible heterocedasticidad moderada.
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+t_residuos <- t.test(residuos, mu = 0)
+t_residuos
+
+```
+
+Como el p-value es 1 que es mucho mayor que 0.05, no rechazamos $H_0$. Entonces, hay evidencia de que la media de los residuos es compatible con cero.
+
+#### Los errores tienen varianza constante V[e] = σ^2
+
+Se plantea la hipótesis nula y alternativa para evaluar la homocedasticidad de los residuos:
+
+$$
+H_0:\ \mathrm{Var}(e)=\sigma^2 \qquad \text{(la varianza de los residuos es constante)}
+$$
+
+$$
+H_1:\ \mathrm{Var}(e)\neq \sigma^2 \qquad \text{(la varianza de los residuos no es constante)}
+$$
+
+Realizamos un gráfico para observar el comportamiento de la varianza de los residuos frente a los valores ajustados, con el fin de verificar visualmente si se cumple el supuesto de homocedasticidad (varianza constante) o si, por el contrario, se presenta heterocedasticidad.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+# 1. Gráfico de residuos vs valores ajustados
+ajustados <- fitted(m1)
+
+plot(ajustados, residuos,
+     col = "green",              # color de los puntos
+     pch = 19,                  # tipo de punto sólido
+     main = "Residuos vs Valores Ajustados",
+     xlab = "Valores Ajustados",
+     ylab = "Residuos")
+# Línea de referencia en 0
+abline(h = 0, col = "red", lwd = 2)
+```
+En el gráfico de residuos vs valores ajustados se observa un aumento de la dispersión de los residuos conforme crecen los valores ajustados, lo que sugiere un patrón de heterocedasticidad. Por tanto, pareciera que la varianza de los errores no parece ser constante y el supuesto de homocedasticidad se cumple solo de manera parcial.
+
+Para contrastar lo que nos indica el gráfico de la varianza, vamos aplicar el test de Breusch-Pagan.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+bptest(m1)
+```
+La prueba de Breusch–Pagan arrojó un valor (BP = 114.48) con p-value < 2.2e-16, por lo que se rechaza ($H_0$) de varianza constante. En consecuencia, hay evidencia de heterocedasticidad y el supuesto de homocedasticidad no se cumple en el modelo.
+
+Como la prueba de Breusch–Pagan rechaza la homocedasticidad, se sugiere transformar la variable respuesta mediante ( \log(preciom)), revisar observaciones atípicas, incorporar variables explicativas adicionales y explorar posibles relaciones no lineales o interacciones. Además, para la inferencia estadística, es conveniente usar errores estándar robustos, ya que permiten obtener conclusiones más confiables en presencia de heterocedasticidad.
+
+#### Los errores son mutuamente independientes
+
+El supuesto de independencia de los errores significa que los residuos (errores del modelo) no deben estar correlacionados entre sí. Para evaluar este supuesto, puede utilizarse la prueba de Durbin-Watson, cuyas hipótesis se plantean de la siguiente manera:
+
+$$
+H_0:\ \mathrm{Cov}(e_i,e_j)=0 \quad \forall\ i \neq j
+\qquad \text{(los errores son independientes)}
+$$
+
+$$
+H_1:\ \mathrm{Cov}(e_i,e_j)\neq 0 \quad \exists\ i \neq j
+\qquad \text{(los errores no son independientes)}
+$$
+
+A continuacion se procede a hacer el grafico:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+plot(resid(m1), type = "l",
+     main = "Residuos vs Observaciones",
+     xlab = "Observaciones",
+     ylab = "Residuos estandarizados")
+abline(h = 0, col = "red")
+```
+En el gráfico de residuos vs observaciones no se observa un patrón sistemático claro, ya que los residuos fluctúan alrededor de cero de forma aparentemente aleatoria. Esto sugiere que el supuesto de independencia de los errores podría cumplirse de manera razonable, aunque existen algunos picos aislados que conviene revisar con el test.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+dwtest(m1)
+```
+La prueba de Durbin–Watson arrojó un estadístico $DW$ = 1.9687, valor cercano a 2, junto con un p-value=0.3519. Dado que el valor-p es mayor a 0.05, no se rechaza la hipótesis nula de independencia de los errores. En consecuencia, no se encuentra evidencia estadísticamente significativa de autocorrelación positiva en los residuos del modelo, por lo que el supuesto de independencia parece cumplirse razonablemente.
+
+### Base1:Paso 5
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+solicitud1_e4 <- data.frame(
+  areaconst = 200,
+  estrato = factor(4, levels = levels(train$estrato)),
+  habitaciones = 4,
+  parqueaderos = 1,
+  banios = 2
+)
+
+solicitud1_e5 <- data.frame(
+  areaconst = 200,
+  estrato = factor(5, levels = levels(train$estrato)),
+  habitaciones = 4,
+  parqueaderos = 1,
+  banios = 2
+)
+
+pred_e4 <- predict(m1, newdata = solicitud1_e4)
+pred_e5 <- predict(m1, newdata = solicitud1_e5)
+
+pred_e4
+pred_e5
+```
+
+El modelo predijo para la primera solicitud un precio de 322.00 millones si la vivienda corresponde a estrato 4 y de 377.48 millones si corresponde a estrato 5. Dado que el presupuesto máximo es de 350 millones, la opción en estrato 4 resulta viable, mientras que la de estrato 5 excede la capacidad de compra estimada. Por ello, se recomienda enfocar la búsqueda en viviendas de estrato 4 con características similares.
+
+
+### Base1:Paso 6
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(leaflet)
+
+# 1. Copia de la base
+datos <- vivienda
+
+# 2. Asegurar que estrato tenga el mismo formato que en el modelo
+datos$estrato <- factor(datos$estrato, levels = levels(train$estrato))
+
+# 3. Crear la primera solicitud (puedes usar estrato 4 como referencia)
+primera_solicitud <- data.frame(
+  areaconst = 200,
+  estrato = factor(4, levels = levels(train$estrato)),
+  habitaciones = 4,
+  banios = 2,
+  parqueaderos = 1
+)
+
+# 4. Predecir precio para todas las viviendas
+datos$precio_predicho <- predict(m1, newdata = datos)
+
+# 5. Filtrar viviendas dentro del crédito máximo
+ofertas_posibles <- datos %>%
+  filter(
+    precio_predicho <= 350,
+    !is.na(longitud),
+    !is.na(latitud)
+  )
+
+# 6. Variables para medir similitud
+vars <- c("areaconst", "estrato", "habitaciones", "banios", "parqueaderos")
+
+# Convertir a numérico para calcular distancias
+ofertas_posibles[, vars] <- lapply(ofertas_posibles[, vars], function(x) as.numeric(as.character(x)))
+primera <- primera_solicitud[, vars]
+primera <- lapply(primera, function(x) as.numeric(as.character(x)))
+primera <- as.data.frame(primera)
+
+# 7. Calcular distancia euclidiana al perfil solicitado
+distancia <- apply(ofertas_posibles[, vars], 1, function(x) {
+  sum((x - primera[1, ])^2)
+})
+
+ofertas_posibles$distancia <- distancia
+
+# 8. Seleccionar las 5 ofertas más similares
+top5_ofertas <- ofertas_posibles %>%
+  arrange(distancia) %>%
+  slice(1:5)
+
+# 9. Ver tabla resumen
+knitr::kable(
+  top5_ofertas %>%
+    select(barrio, zona, estrato, areaconst, habitaciones, banios,
+           parqueaderos, preciom, precio_predicho, distancia),
+  caption = "Top 5 ofertas potenciales para la solicitud 1"
+)
+
+# 10. Agrupar por ubicación en caso de coordenadas repetidas
+top5_ofertas_agrupadas <- top5_ofertas %>%
+  group_by(longitud, latitud) %>%
+  summarise(
+    popup = paste(
+      sapply(1:n(), function(i) paste0(
+        "<b>Oferta:</b> ", i,
+        "<br><b>Barrio:</b> ", barrio[i],
+        "<br><b>Zona:</b> ", zona[i],
+        "<br><b>Estrato:</b> ", estrato[i],
+        "<br><b>Área:</b> ", areaconst[i],
+        "<br><b>Habitaciones:</b> ", habitaciones[i],
+        "<br><b>Baños:</b> ", banios[i],
+        "<br><b>Parqueaderos:</b> ", parqueaderos[i],
+        "<br><b>Precio observado:</b> ", round(preciom[i], 2),
+        "<br><b>Precio predicho:</b> ", round(precio_predicho[i], 2)
+      )),
+      collapse = "<hr>"
+    ),
+    .groups = "drop"
+  )
+
+# 11. Mapa de ofertas potenciales
+leaflet(top5_ofertas_agrupadas) %>%
+  addTiles() %>%
+  addMarkers(
+    lng = ~longitud,
+    lat = ~latitud,
+    popup = ~popup
+  )
+```
+
+A partir del modelo se identificaron cinco ofertas potenciales con precio predicho menor o igual a 350 millones, por lo que son opciones viables para la primera solicitud. En general, las viviendas seleccionadas coinciden con el área requerida de 200 m² y cuentan con 1 parqueadero, aunque presentan algunas diferencias en estrato, número de habitaciones y baños.
+
+Entre las alternativas, la oferta ubicada en El Caney es la más cercana al perfil solicitado, ya que tiene 200 m², 4 habitaciones, 2 baños, 1 parqueadero y estrato 4, con un precio predicho de 322 millones, valor que se ajusta al presupuesto disponible. Las demás opciones, ubicadas en barrios como Ciudad 2000, Meléndez, Nápoles y El Guabal, también son viables financieramente, aunque se apartan un poco más de las características ideales.
+
+En conclusión, sí existen ofertas que responden razonablemente a la solicitud dentro del presupuesto máximo, siendo El Caney la alternativa más recomendada y las demás opciones buenas alternativas para discutir con el cliente.
+
+### Base2:Paso 1
+
+Se realiza el filtro de la base de datos y presenta los primeros 3 registros de las bases y algunas tablas que comprueben la consulta:
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+base2 <- vivienda %>%
+  filter(
+    zona == "Zona Sur",          # ojo: en tu base aparece "Zona Norte"
+    tipo == "Apartamento"
+  )
+
+nrow(base2)
+```
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+knitr::kable(head(base2, 3), caption = "base2")
+```
+
+### Base2:Paso 2
+
+
+
