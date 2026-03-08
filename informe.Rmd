@@ -1,6 +1,6 @@
 ---
 title: "Informe Modelo de Regresión Lineal Múltiple"
-author: "Grupo 7"
+author: "Carlos Preciado"
 output:
   html_document:
     encoding: UTF-8
@@ -109,7 +109,7 @@ knitr::kable(tabla_variables_vivienda, caption = "Tabla 1. Descripción y tipo d
 
 ## Pasos requeridos para la obtención de los resultados
 
-### Base1:Paso 1
+### Base1: Paso 1
 
 Si se hace el filtro tal cual se ve en la Fig. X, entonces no aparece ninguna fila
 
@@ -314,7 +314,7 @@ map
 
 
 
-### Base1:Paso 2
+### Base1: Paso 2
 
 #### Variables cuantitativas
 
@@ -327,38 +327,51 @@ vivienda <- vivienda[!duplicados, ]
 Procedemos a hacer estadistica descriptiva con los datos y obtenemos que
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
-cols <- c("preciom", "areaconst","banios","habitaciones")
-# Separar numéricas vs categóricas
+cols <- c("preciom", "areaconst", "banios", "habitaciones", "parqueaderos")
+
+# Seleccionar solo columnas numéricas
 cols_num <- cols[sapply(base1[, cols, drop = FALSE], is.numeric)]
 
+# Función para coeficiente de variación
+cv <- function(x) {
+  m <- mean(x, na.rm = TRUE)
+  s <- sd(x, na.rm = TRUE)
+  if (is.na(m) || m == 0) NA_real_ else (s / m) * 100
+}
+
+# Tabla descriptiva
 tabla_desc <- data.frame(
   Variable = cols_num,
-  Mínimo   = sapply(base1[, cols_num, drop = FALSE], function(x) min(x, na.rm = TRUE)),
-  Máximo   = sapply(base1[, cols_num, drop = FALSE], function(x) max(x, na.rm = TRUE)),
-  Mediana  = sapply(base1[, cols_num, drop = FALSE], function(x) median(x, na.rm = TRUE)),
-  Media    = sapply(base1[, cols_num, drop = FALSE], function(x) mean(x, na.rm = TRUE)),
-  `Desviación estándar` = sapply(base1[, cols_num, drop = FALSE], function(x) sd(x, na.rm = TRUE)),
-  `Coef. de variación (%)` = sapply(base1[, cols_num, drop = FALSE], function(x) {
-    m <- mean(x, na.rm = TRUE); s <- sd(x, na.rm = TRUE)
-    if (is.na(m) || m == 0) NA_real_ else (s/m) * 100
-  }),
-  `Primer cuartil` = sapply(base1[, cols_num, drop = FALSE], function(x) quantile(x, 0.25, na.rm = TRUE, type = 7)),
-  `Tercer cuartil` = sapply(base1[, cols_num, drop = FALSE], function(x) quantile(x, 0.75, na.rm = TRUE, type = 7)),
-  Asimetría = sapply(base1[, cols_num, drop = FALSE], function(x) e1071::skewness(x, na.rm = TRUE, type = 2)),
-  Curtosis  = sapply(base1[, cols_num, drop = FALSE], function(x) e1071::kurtosis(x, na.rm = TRUE, type = 2)) - 3
+  Minimo = sapply(base1[, cols_num, drop = FALSE], min, na.rm = TRUE),
+  Maximo = sapply(base1[, cols_num, drop = FALSE], max, na.rm = TRUE),
+  Mediana = sapply(base1[, cols_num, drop = FALSE], median, na.rm = TRUE),
+  Media = sapply(base1[, cols_num, drop = FALSE], mean, na.rm = TRUE),
+  `Desviacion estandar` = sapply(base1[, cols_num, drop = FALSE], sd, na.rm = TRUE),
+  `Coef. de variacion (%)` = sapply(base1[, cols_num, drop = FALSE], cv),
+  `Primer cuartil` = sapply(base1[, cols_num, drop = FALSE], quantile, probs = 0.25, na.rm = TRUE, type = 7),
+  `Tercer cuartil` = sapply(base1[, cols_num, drop = FALSE], quantile, probs = 0.75, na.rm = TRUE, type = 7),
+  Asimetria = sapply(base1[, cols_num, drop = FALSE], e1071::skewness, na.rm = TRUE, type = 2),
+  Curtosis = sapply(base1[, cols_num, drop = FALSE], function(x) e1071::kurtosis(x, na.rm = TRUE, type = 2) - 3),
+  row.names = NULL,
+  check.names = FALSE
 )
 
-# Redondear (ajusta si quieres)
+# Redondear solo columnas numéricas
 tabla_desc <- tabla_desc %>%
-  dplyr::mutate(dplyr::across(-Variable, ~round(.x, 2)))
+  dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 2)))
 
-knitr::kable(tabla_desc, caption = "Estadísticos descriptivos (variables numéricas)")
+knitr::kable(
+  tabla_desc,
+  caption = "Estadísticos descriptivos (variables numéricas)"
+)
 ```
 
+La tabla de estadísticos descriptivos muestra que las variables numéricas presentan niveles de dispersión distintos. En particular, preciom y areaconst registran los valores máximos más altos y también una variabilidad considerable, lo que sugiere la existencia de viviendas con precios y áreas muy superiores al promedio. Además, en ambas variables la media es mayor que la mediana, lo que indica asimetría positiva, es decir, una concentración de observaciones en valores medios y una cola hacia valores altos.
 
+En banios, habitaciones y parqueaderos, las medianas se ubican en valores típicos del mercado, alrededor de 3 baños, 4 habitaciones y 2 parqueaderos. Estas variables presentan menor dispersión absoluta que precio y área, aunque sus coeficientes de variación muestran que parqueaderos y areaconst tienen una variabilidad relativa importante dentro de la muestra. En conjunto, los resultados reflejan un mercado heterogéneo, con predominio de viviendas de características intermedias, pero también con presencia de inmuebles de mayor tamaño y valor.
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
-cols <- c("preciom", "areaconst","banios","habitaciones")
+cols <- c("preciom", "areaconst","banios","habitaciones","parqueaderos")
 
 cols_num <- cols[sapply(base1[, cols, drop = FALSE], is.numeric)]
 n_bins <- 30
@@ -395,16 +408,27 @@ subplot(
 )
 ```
 
-```{r echo = TRUE, message = FALSE, warning = FALSE}
+El conjunto de histogramas muestra la distribución de las variables cuantitativas consideradas en el análisis: preciom, areaconst, banios, habitaciones y parqueaderos. En general, se observa que las variables preciom y areaconst presentan una marcada asimetría positiva, con mayor concentración de viviendas en valores bajos o intermedios y una cola larga hacia la derecha, lo que indica la presencia de inmuebles con precios y áreas considerablemente superiores al promedio. Este comportamiento es común en datos inmobiliarios y sugiere que podrían ser útiles transformaciones como el logaritmo para mejorar el ajuste del modelo.
 
+En el caso de banios y habitaciones, la mayor frecuencia se concentra en valores centrales, especialmente entre 2 y 4 baños y entre 3 y 5 habitaciones, lo que sugiere que la mayoría de las viviendas tienen características relativamente homogéneas en estos atributos. Sin embargo, también aparecen algunos valores altos poco frecuentes, lo que evidencia la existencia de viviendas atípicas o de mayor tamaño.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
 p1 <- plot_ly(base1, y = ~preciom, type = "box", name = "preciom")
 p2 <- plot_ly(base1, y = ~areaconst, type = "box", name = "areaconst")
 p3 <- plot_ly(base1, y = ~banios, type = "box", name = "banios")
 p4 <- plot_ly(base1, y = ~habitaciones, type = "box", name = "habitaciones")
+p5 <- plot_ly(base1, y = ~parqueaderos, type = "box", name = "parqueaderos")
 
-subplot(p1, p2, p3, p4, nrows = 2, shareX = FALSE, shareY = FALSE) %>%
-  layout(title = "Boxplots por variable (2x2)")
+subplot(p1, p2, p3, p4, p5, nrows = 3, shareX = FALSE, shareY = FALSE) %>%
+  layout(title = "Boxplots por variable")
 ```
+
+El conjunto de boxplots permite comparar la distribución, dispersión y presencia de valores atípicos en las variables cuantitativas preciom, areaconst, banios, habitaciones y parqueaderos. En general, se observa que preciom y areaconst presentan una mayor variabilidad y varios valores atípicos en la parte superior, lo que confirma la existencia de viviendas con precios y áreas construidas considerablemente más altas que la mayoría. Esto es consistente con la asimetría positiva observada previamente en los histogramas.
+
+En banios y habitaciones, la dispersión es menor y la mayor parte de las observaciones se concentra en rangos intermedios, especialmente alrededor de 2 a 4 baños y de 3 a 5 habitaciones. No obstante, también se identifican algunos valores atípicos altos, lo que refleja la presencia de inmuebles con características superiores a las habituales. En parqueaderos, la mayoría de las viviendas se concentra entre 1 y 3 espacios, aunque aparecen algunos casos extremos con un número considerablemente mayor.
+
+En conjunto, los boxplots muestran que varias variables presentan valores atípicos, principalmente en la cola superior, lo que sugiere que no se trata de distribuciones completamente simétricas. Este comportamiento es esperable en datos inmobiliarios, donde existen propiedades con atributos muy superiores al promedio, y refuerza la conveniencia de evaluar transformaciones o métodos robustos en el proceso de modelamiento.
+
 #### Variables cualitativas
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
@@ -428,36 +452,18 @@ p_estrato <- plot_ly(
     yaxis = list(title = "Frecuencia")
   )
 
-# Conteos para parqueaderos
-parq_counts <- base1 %>%
-  filter(!is.na(parqueaderos)) %>%
-  count(parqueaderos) %>%
-  mutate(parqueaderos = as.factor(parqueaderos)) %>%
-  arrange(parqueaderos)
-
-p_parq <- plot_ly(
-  parq_counts,
-  x = ~parqueaderos, y = ~n,
-  type = "bar",
-  showlegend = FALSE
-) %>%
-  layout(
-    title = "Frecuencia por número de parqueaderos (base1)",
-    xaxis = list(title = "Parqueaderos"),
-    yaxis = list(title = "Frecuencia")
-  )
-
-subplot(p_estrato, p_parq, nrows = 1, shareY = FALSE) %>%
-  layout(title = "Gráficos de barras: estrato y parqueaderos (base1)")
+subplot(p_estrato, nrows = 1, shareY = FALSE) %>%
+  layout(title = "Gráficos de barras: estrato (base1)")
 
 ```
 
+El gráfico de barras muestra la distribución de frecuencias de la variable estrato en la base analizada. Se observa que la mayor concentración de viviendas corresponde al estrato 5, seguido del estrato 3 y luego del estrato 4, mientras que el estrato 6 presenta la menor frecuencia. Esto indica que la oferta de inmuebles en la muestra se concentra principalmente en estratos medios y medios-altos, con una participación más reducida de viviendas en el nivel más alto.
 
 #### Valores atipicos 
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 
-vars_num <- c("preciom", "areaconst", "banios", "habitaciones")
+vars_num <- c("preciom", "areaconst", "banios", "habitaciones", "parqueaderos")
 
 # 2) Función para calcular outliers por IQR (IRC)
 outliers_iqr <- function(x, k = 1.5) {
@@ -496,16 +502,18 @@ resumen_atipicos <- lapply(vars_num, function(v) {
 knitr::kable(resumen_atipicos, caption = "Outliers por IQR (IRC) - Resumen")
 ```
 
-Con la Tabla X con el criterio del rango intercuartílico (IQR/IRC, k = 1.5) se identificaron observaciones que quedan por fuera del intervalo ([Q1 - 1.5 IQR,; Q3 + 1.5 IQR]). En total se analizaron 722 registros válidos por variable y el porcentaje de valores atípicos fue bajo–moderado (entre aprox. 2% y aprox.4%). La variable precio (preciom) presentó la mayor proporción de atípicos (31 casos; 4.29%); con Q1 = 261.25 y Q3 = 550 (IQR = 288.75), el límite superior se ubicó en 983.12, lo que sugiere que los atípicos corresponden principalmente a inmuebles considerablemente más costosos que el resto; el límite inferior resultó negativo (-171.88), sin interpretación económica, por lo que es esperable que la mayoría de atípicos se concentren en valores altos. En habitaciones se detectaron 27 atípicos (3.74%), con límites entre 0 y 8, lo cual suele asociarse a inmuebles con un número inusualmente alto de habitaciones o, en casos puntuales, a posibles inconsistencias en el registro. Para área construida (areaconst) se identificaron 26 atípicos (3.60%) con límite superior de 631.88; al igual que en precio, el límite inferior fue negativo (-155.12), indicando que los atípicos corresponden casi con seguridad a áreas muy grandes, típicas de propiedades fuera del “promedio” del mercado. Finalmente, baños (banios) fue la variable con menos atípicos (14; 1.94%), con límites entre -1 y 7, por lo que los casos relevantes se ubican principalmente en valores altos (más de 7 baños). En conjunto, los atípicos parecen responder a una cola superior (valores altos) y no necesariamente a errores, algo común en datos inmobiliarios donde existen inmuebles “premium” o de gran tamaño. Por lo que se considera hacer transformaciones logaritmicas en precio y areaconst, en el siguiente paso, en lugar de eliminar los valores atipicos, especialmente si se busca modelar precios.
+La tabla de outliers por IQR muestra que todas las variables analizadas presentan algunos valores atípicos, aunque en proporciones relativamente bajas. La mayor cantidad de atípicos se observa en preciom, con 31 casos (4.29%), seguida de habitaciones con 27 (3.74%) y areaconst con 26 (3.60%). En cambio, banios y parqueaderos presentan menos observaciones extremas, con 14 (1.94%) y 8 (1.84%), respectivamente.
+
+En general, los límites inferiores calculados para preciom, areaconst, banios y parqueaderos resultan negativos, lo cual no tiene interpretación práctica en este contexto. Esto sugiere que los valores atípicos se concentran principalmente en la cola superior de las distribuciones, es decir, en viviendas con precios, áreas o características más altas de lo habitual. En conjunto, estos resultados indican que los valores extremos parecen corresponder más a inmuebles poco comunes dentro del mercado que a errores evidentes de registro.
 
 #### Valores faltantes e imputación
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
-  cols <- c("preciom", "areaconst", "estrato","banios","habitaciones","zona")
+cols <- c("preciom", "areaconst", "estrato","banios","habitaciones","zona")
 
 tabla_na <- data.frame(
   columna = cols,
-  n    = sapply(vivienda[, cols, drop = FALSE], function(x) sum(is.na(x))),
+  n    = sapply(base1[, cols, drop = FALSE], function(x) sum(is.na(x))),
   porcentaje_na  = round(sapply(vivienda[, cols, drop = FALSE], function(x) mean(is.na(x)) * 100), 2)
 )
 
@@ -515,7 +523,7 @@ tabla_na <- tabla_na[order(-tabla_na$porcentaje_na), ]
 knitr::kable(tabla_na, caption = "Faltantes por columna (n y %)")
 ```
 
-De la Tabla X, se puede mirar que el porcentaje de NA son menores al 5% por lo que primero se va a separar el codigo entre train (80% de los datos) y test (20%). 
+De la tabla, se puede mirar que el porcentaje de NA son menores al 2% por lo que primero se va a separar el codigo entre train (80% de los datos) y test (20%). 
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
 set.seed(123)
@@ -527,56 +535,92 @@ idx_train <- sample(seq_len(n), size = floor(0.8 * n))
 train <- base1[idx_train, ]
 test  <- base1[-idx_train, ]
 
-# 1) Log de precio (respuesta)
-train <- train %>% mutate(log_preciom = log(preciom))
-test  <- test  %>% mutate(log_preciom = log(preciom))
-
 # 2) Imputación aprendida en train
-num_vars <- c("areaconst","banios","habitaciones","parqueaderos","estrato")
-cat_vars <- c("zona")
+num_vars <- c("areaconst", "banios", "habitaciones", "parqueaderos")
+cat_vars <- c("zona", "estrato")
 
-# Imputacion cuantitativas Medianas numéricas (train)
-medianas <- sapply(train[, num_vars], \(x) median(x, na.rm = TRUE))
+# Imputación cuantitativas: mediana
+medianas <- sapply(train[, num_vars, drop = FALSE], function(x) median(x, na.rm = TRUE))
 
-for(v in num_vars){
+for (v in num_vars) {
   train[[v]][is.na(train[[v]])] <- medianas[[v]]
   test[[v]][is.na(test[[v]])]   <- medianas[[v]]
 }
 
-# Moda categórica (train)
-moda <- function(x){
+# Moda categórica
+moda <- function(x) {
   x <- x[!is.na(x)]
   names(sort(table(x), decreasing = TRUE))[1]
 }
-modas <- sapply(train[, cat_vars, drop=FALSE], moda)
 
-for(v in cat_vars){
+modas <- sapply(train[, cat_vars, drop = FALSE], moda)
+
+for (v in cat_vars) {
   train[[v]][is.na(train[[v]])] <- modas[[v]]
   test[[v]][is.na(test[[v]])]   <- modas[[v]]
 }
 
 ```
 
-### Base1:Paso 3
+### Base1: Paso 3
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
-# Asegura estrato como numérica
-train$estrato <- as.factor(train$estrato)
-test$estrato  <- as.factor(test$estrato)
+# Asegurar estrato como factor
+train$estrato <- factor(train$estrato)
+test$estrato  <- factor(test$estrato, levels = levels(train$estrato))
 
-# Modelo múltiple (en escala original)
-m1 <- lm(preciom ~ areaconst + factor(estrato) + habitaciones + parqueaderos + banios, data = train)
+# Modelo múltiple
+m1 <- lm(preciom ~ areaconst + estrato + habitaciones + parqueaderos + banios, data = train)
 summary(m1)
 
 ```
 
-#### Interpretacion de los coeficientes
+#### Interpretacion de los coeficientes e interpretación del R^2
+- areaconst:
 
+El coeficiente de areaconst es positivo y estadísticamente significativo, lo que indica que, manteniendo constantes las demás variables, por cada metro cuadrado adicional de área construida, el precio de la vivienda aumenta en promedio 0.7031 millones. Este resultado es coherente con la lógica del mercado inmobiliario, ya que una mayor área construida suele asociarse con un mayor valor del inmueble.
 
+- Estrato:
+
+La variable estrato fue incorporada al modelo como factor, por lo que sus coeficientes se interpretan en comparación con la categoría de referencia, que en este caso es el estrato 3.
+
+Estrato 4: Manteniendo constantes las demás variables, una vivienda en estrato 4 tiene en promedio un precio 89.82 millones más alto que una vivienda en estrato 3. Este efecto es estadísticamente significativo y refleja una diferencia importante en el valor de mercado entre ambos estratos.
+
+Estrato 5: Una vivienda en estrato 5 cuesta en promedio 145.30 millones más que una vivienda en estrato 3, controlando por área construida, habitaciones, parqueaderos y baños. La magnitud de este efecto confirma que, a medida que aumenta el estrato, el precio de la vivienda también se incrementa de manera importante.
+
+Estrato 6: Una vivienda en estrato 6 tiene en promedio un precio 368.37 millones mayor que una vivienda en estrato 3, manteniendo constantes las demás variables. Este es el efecto más alto entre las categorías de estrato y su magnitud es consistente con la realidad del mercado, donde los inmuebles de estratos más altos suelen ubicarse en sectores de mayor valorización y mejores condiciones urbanas.
+
+En conjunto, los resultados muestran que el estrato tiene un impacto positivo, creciente y altamente significativo sobre el precio de la vivienda. Esto sugiere que la localización socioeconómica es un determinante importante del valor del inmueble, incluso controlando por características físicas como área, número de habitaciones, baños y parqueaderos.
+
+- habitaciones:
+
+El coeficiente de habitaciones es negativo, con un valor de -2.39, pero no resulta estadísticamente significativo. Esto indica que, manteniendo constantes las demás variables, no hay evidencia suficiente para afirmar que el número de habitaciones tenga un efecto propio sobre el precio de la vivienda. El signo negativo puede interpretarse como que, para una misma área construida, un mayor número de habitaciones podría implicar espacios más reducidos, aunque en este caso dicho efecto no es concluyente.
+
+- parqueaderos:
+
+El coeficiente de parqueaderos es positivo y significativo. Esto indica que, manteniendo constantes las demás variables, cada parqueadero adicional incrementa el precio promedio de la vivienda en 16.29 millones. Este resultado es coherente con el mercado, ya que disponer de parqueaderos constituye un atributo valorado por los compradores y contribuye al aumento del valor del inmueble.
+
+- banios:
+
+El coeficiente de banios es positivo y altamente significativo, lo que indica que, manteniendo constantes las demás variables, cada baño adicional aumenta el precio promedio de la vivienda en 30.33 millones. Este hallazgo es lógico, dado que un mayor número de baños suele estar asociado con más comodidad, funcionalidad y mejor percepción de calidad en la vivienda.
+
+- Interpretacion R^2
+
+El coeficiente de determinación del modelo fue (R^2 = 0.678), lo que indica que el 67.8% de la variabilidad observada en el precio de la vivienda es explicada por las variables incluidas en el modelo: área construida, estrato, número de habitaciones, parqueaderos y baños. En otras palabras, el modelo logra capturar una proporción importante de los cambios en el precio a partir de estas características.
+
+Por su parte, el (R^2) ajustado fue 0.674, valor muy cercano al (R^2), lo que sugiere que las variables incorporadas aportan información relevante y que el ajuste del modelo no se debe simplemente a la inclusión de más predictores. La pequeña diferencia entre ambos indicadores muestra que el modelo mantiene una capacidad explicativa estable.
+
+En conjunto, estos resultados permiten concluir que el modelo presenta un ajuste moderadamente alto, adecuado para explicar el comportamiento del precio de las viviendas, aunque todavía queda un 32.2% de variabilidad sin explicar, posiblemente asociado a otros factores no incluidos, como barrio, ubicación exacta, antigüedad, estado del inmueble o características de acabados.
 
 #### Discusion del ajuste e implicaciones
 
-### Base1:Paso 4
+El modelo presenta un ajuste moderadamente alto. El valor de (R^2 = 0.678) indica que cerca del 67.8% de la variación en el precio de la vivienda es explicada por las variables incluidas, mientras que el (R^2) ajustado de 0.674 confirma que el conjunto de predictores aporta información real y que el desempeño no se debe solo al número de variables incorporadas. Además, el estadístico F resultó significativo, lo que muestra que, en conjunto, las variables explicativas mejoran de manera importante la capacidad del modelo para explicar el precio frente a un modelo sin predictores.
+
+Desde el punto de vista práctico, el modelo logra capturar buena parte de la estructura del mercado inmobiliario, especialmente a través de variables como área construida, estrato, baños y parqueaderos, que resultaron relevantes y coherentes con la teoría. Sin embargo, todavía queda una fracción importante de variabilidad sin explicar, lo cual sugiere que el precio también depende de otros factores no incluidos en la especificación actual. Entre ellos podrían estar el barrio, la ubicación exacta, la antigüedad del inmueble, el estado de conservación, los acabados, el piso, la cercanía a servicios y vías principales, o incluso características del entorno urbano.
+
+Para mejorar el modelo, una primera alternativa es incorporar variables adicionales de localización, como barrio, zona o incluso las coordenadas geográficas. También sería útil explorar transformaciones, por ejemplo usar ( \log(preciom) ) y/o ( \log(areaconst) ), ya que en datos inmobiliarios suele haber asimetría y heterocedasticidad. Otra opción es evaluar relaciones no lineales e interacciones, por ejemplo entre área y estrato, si se sospecha que el efecto del tamaño cambia según el nivel socioeconómico. Finalmente, dado que en los diagnósticos aparecieron problemas de normalidad y heterocedasticidad, conviene comparar este modelo con versiones alternativas, usar errores estándar robustos o considerar especificaciones más flexibles que mejoren tanto la inferencia como la predicción.
+
+### Base1: Paso 4
 
 #### Normalidad de los errores
 
@@ -619,7 +663,6 @@ hist(residuos, breaks = 50, freq = FALSE, col = "lightblue",
 curve(dnorm(x, mean = mean(residuos, na.rm = TRUE), sd = sd(residuos, na.rm = TRUE)),
       col = "red", lwd = 2, add = TRUE)
 
-
 ```
 
 En el QQ-plot se observa que los residuos se alinean razonablemente bien con la recta teórica en la zona central, lo que sugiere un comportamiento aproximadamente normal alrededor de la media. Sin embargo, en los extremos los puntos se apartan claramente de la línea (especialmente en la cola derecha), indicando colas más pesadas y cierta asimetría. El histograma refuerza esta idea: la forma general es similar a una campana, pero aparecen valores extremos y una cola derecha larga, por lo que el supuesto de normalidad se cumple solo de manera parcial. Esto no invalida automáticamente el modelo, pero conviene considerarlo al interpretar pruebas de significancia (p-values), ya que la inferencia clásica puede verse afectada cuando hay colas pesadas. Para confirmar formalmente la normalidad, se complementa la inspección visual con un test más sensible a colas (por ejemplo, Anderson–Darling o D’Agostino), que suele detectar este tipo de desviaciones.
@@ -636,17 +679,7 @@ El test de Anderson-Darling me arroja un p-value<0.05, rechazando la hipótesis 
 
 #### Los errores tienen media E[e]=0
 
-Se utiliza t-test de una muestra, para contrastar la formulacion de las hipótesis:
-$$
-H_0: \mu = 0 \qquad \text{(la media de los residuos es cero)}
-$$
-
-
-
-$$
-H_1: \mu \neq 0 \qquad \text{(la media de los residuos difiere de cero)}
-$$
-Antes del test, se visualiza la distribución de los residuos para tener una estimacion de su comportamiento y verificar si estan centrados en cero.
+Se visualiza la distribución de los residuos para tener una estimacion de su comportamiento y verificar si estan centrados en cero.
 
 ```{r echo = TRUE, message = FALSE, warning = FALSE}
 plot(residuos, type = "p", col = "blue",
@@ -656,13 +689,6 @@ abline(h = 0, col = "red", lwd = 2)
 ```
 
 El gráfico de residuos vs observaciones muestra que los errores se distribuyen alrededor de cero sin un patrón sistemático evidente, lo que sugiere que el modelo no presenta un sesgo claro. No obstante, se observan algunos residuos extremos y una dispersión algo irregular en ciertos sectores, lo que podría indicar la presencia de observaciones atípicas y posible heterocedasticidad moderada.
-```{r echo = TRUE, message = FALSE, warning = FALSE}
-t_residuos <- t.test(residuos, mu = 0)
-t_residuos
-
-```
-
-Como el p-value es 1 que es mucho mayor que 0.05, no rechazamos $H_0$. Entonces, hay evidencia de que la media de los residuos es compatible con cero.
 
 #### Los errores tienen varianza constante V[e] = σ^2
 
@@ -732,7 +758,24 @@ dwtest(m1)
 ```
 La prueba de Durbin–Watson arrojó un estadístico $DW$ = 1.9687, valor cercano a 2, junto con un p-value=0.3519. Dado que el valor-p es mayor a 0.05, no se rechaza la hipótesis nula de independencia de los errores. En consecuencia, no se encuentra evidencia estadísticamente significativa de autocorrelación positiva en los residuos del modelo, por lo que el supuesto de independencia parece cumplirse razonablemente.
 
-### Base1:Paso 5
+### Base1: Paso 5
+
+Con el modelo identificado, se predice el el precio de la vivienda.
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# 1. Predicción sobre el set de prueba
+pred_test <- predict(m1, newdata = test)
+
+# 2. Comparación real vs predicho en test
+resultados_test <- data.frame(
+  Real = test$preciom,
+  Predicho = pred_test
+)
+
+head(resultados_test)
+
+```
+
+Al hacer filtro con las caracteristicas de la primera solicitud
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 solicitud1_e4 <- data.frame(
@@ -761,12 +804,9 @@ pred_e5
 El modelo predijo para la primera solicitud un precio de 322.00 millones si la vivienda corresponde a estrato 4 y de 377.48 millones si corresponde a estrato 5. Dado que el presupuesto máximo es de 350 millones, la opción en estrato 4 resulta viable, mientras que la de estrato 5 excede la capacidad de compra estimada. Por ello, se recomienda enfocar la búsqueda en viviendas de estrato 4 con características similares.
 
 
-### Base1:Paso 6
+### Base1: Paso 6
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
-library(dplyr)
-library(leaflet)
-
 # 1. Copia de la base
 datos <- vivienda
 
@@ -854,9 +894,9 @@ leaflet(top5_ofertas_agrupadas) %>%
   )
 ```
 
-A partir del modelo se identificaron cinco ofertas potenciales con precio predicho menor o igual a 350 millones, por lo que son opciones viables para la primera solicitud. En general, las viviendas seleccionadas coinciden con el área requerida de 200 m² y cuentan con 1 parqueadero, aunque presentan algunas diferencias en estrato, número de habitaciones y baños.
+A partir del modelo se identificaron cinco ofertas potenciales con precio predicho menor o igual a 350 millones, por lo que son opciones viables para la primera solicitud. En general, las viviendas seleccionadas coinciden con el área requerida de 200 m^2 y cuentan con 1 parqueadero, aunque presentan algunas diferencias en estrato, número de habitaciones y baños.
 
-Entre las alternativas, la oferta ubicada en El Caney es la más cercana al perfil solicitado, ya que tiene 200 m², 4 habitaciones, 2 baños, 1 parqueadero y estrato 4, con un precio predicho de 322 millones, valor que se ajusta al presupuesto disponible. Las demás opciones, ubicadas en barrios como Ciudad 2000, Meléndez, Nápoles y El Guabal, también son viables financieramente, aunque se apartan un poco más de las características ideales.
+Entre las alternativas, la oferta ubicada en El Caney es la más cercana al perfil solicitado, ya que tiene 200 m^2, 4 habitaciones, 2 baños, 1 parqueadero y estrato 4, con un precio predicho de 322 millones, valor que se ajusta al presupuesto disponible. Las demás opciones, ubicadas en barrios como Ciudad 2000, Meléndez, Nápoles y El Guabal, también son viables financieramente, aunque se apartan un poco más de las características ideales.
 
 En conclusión, sí existen ofertas que responden razonablemente a la solicitud dentro del presupuesto máximo, siendo El Caney la alternativa más recomendada y las demás opciones buenas alternativas para discutir con el cliente.
 
@@ -879,5 +919,549 @@ knitr::kable(head(base2, 3), caption = "base2")
 
 ### Base2:Paso 2
 
+#### Variables cuantitativas
+
+Procedemos a hacer estadistica descriptiva con los datos y obtenemos que
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+cols <- c("preciom", "areaconst", "banios", "habitaciones", "parqueaderos")
+
+# Seleccionar solo las columnas numéricas disponibles en base2
+cols_num <- cols[sapply(base2[, cols, drop = FALSE], is.numeric)]
+
+# Función para coeficiente de variación
+cv <- function(x) {
+  m <- mean(x, na.rm = TRUE)
+  s <- sd(x, na.rm = TRUE)
+  if (is.na(m) || m == 0) NA_real_ else (s / m) * 100
+}
+
+# Construcción de tabla descriptiva
+tabla_desc <- data.frame(
+  Variable = cols_num,
+  Minimo = sapply(base2[, cols_num, drop = FALSE], min, na.rm = TRUE),
+  Maximo = sapply(base2[, cols_num, drop = FALSE], max, na.rm = TRUE),
+  Mediana = sapply(base2[, cols_num, drop = FALSE], median, na.rm = TRUE),
+  Media = sapply(base2[, cols_num, drop = FALSE], mean, na.rm = TRUE),
+  `Desviacion estandar` = sapply(base2[, cols_num, drop = FALSE], sd, na.rm = TRUE),
+  `Coef. de variacion (%)` = sapply(base2[, cols_num, drop = FALSE], cv),
+  `Primer cuartil` = sapply(base2[, cols_num, drop = FALSE], quantile, probs = 0.25, na.rm = TRUE, type = 7),
+  `Tercer cuartil` = sapply(base2[, cols_num, drop = FALSE], quantile, probs = 0.75, na.rm = TRUE, type = 7),
+  Asimetria = sapply(base2[, cols_num, drop = FALSE], e1071::skewness, na.rm = TRUE, type = 2),
+  Curtosis = sapply(base2[, cols_num, drop = FALSE], function(x) e1071::kurtosis(x, na.rm = TRUE, type = 2) - 3),
+  row.names = NULL,
+  check.names = FALSE
+)
+
+# Redondear solo columnas numéricas
+tabla_desc <- tabla_desc %>%
+  dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 2)))
+
+knitr::kable(
+  tabla_desc,
+  caption = "Estadísticos descriptivos de las variables numéricas"
+)
+```
+
+La tabla muestra que preciom y areaconst presentan la mayor dispersión y una clara asimetría positiva, ya que la media supera a la mediana en ambos casos. Esto sugiere la presencia de viviendas con precios y áreas considerablemente superiores al promedio. En banios y habitaciones, los valores se concentran más en rangos intermedios, con menor variabilidad relativa. Por su parte, parqueaderos presenta una fuerte asimetría positiva, lo que indica que la mayoría de las viviendas tiene pocos parqueaderos, aunque existen algunos casos con valores altos. En conjunto, los resultados reflejan un mercado heterogéneo y justifican revisar posibles valores atípicos y transformaciones en variables como precio y área.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+cols <- c("preciom", "areaconst", "banios", "habitaciones", "parqueaderos")
+
+cols_num <- cols[sapply(base2[, cols, drop = FALSE], is.numeric)]
+n_bins <- 30
+
+plots <- lapply(cols_num, function(v) {
+  x <- base2[[v]]
+  x <- x[!is.na(x)]
+
+  plot_ly(
+    x = x,
+    type = "histogram",
+    nbinsx = n_bins,
+    showlegend = FALSE
+  ) %>%
+    layout(
+      margin = list(t = 40),
+      xaxis = list(title = ""),
+      yaxis = list(title = "Frecuencia"),
+      annotations = list(list(
+        text = v,
+        x = 0.5, y = 1.12,
+        xref = "paper", yref = "paper",
+        showarrow = FALSE,
+        xanchor = "center",
+        font = list(size = 14)
+      ))
+    )
+})
+
+subplot(
+  plots,
+  nrows = ceiling(length(plots) / 2),
+  shareX = FALSE,
+  shareY = FALSE
+)
+
+```
+
+Los histogramas muestran que preciom y areaconst presentan una marcada asimetría positiva, con mayor concentración de observaciones en valores bajos y una cola hacia la derecha, lo que sugiere la presencia de viviendas con precios y áreas superiores al promedio. En banios y habitaciones, la mayor parte de los datos se concentra en valores intermedios, especialmente entre 2 y 4 baños y alrededor de 3 habitaciones. Por su parte, parqueaderos también muestra asimetría positiva, con predominio de viviendas con 1 o 2 parqueaderos y pocos casos con valores más altos. En conjunto, el gráfico refleja distribuciones no simétricas y posibles valores extremos en varias variables.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+p1 <- plot_ly(base2, y = ~preciom, type = "box", name = "preciom")
+p2 <- plot_ly(base2, y = ~areaconst, type = "box", name = "areaconst")
+p3 <- plot_ly(base2, y = ~banios, type = "box", name = "banios")
+p4 <- plot_ly(base2, y = ~habitaciones, type = "box", name = "habitaciones")
+p5 <- plot_ly(base2, y = ~parqueaderos, type = "box", name = "parqueaderos")
+
+subplot(p1, p2, p3, p4, p5, nrows = 3, shareX = FALSE, shareY = FALSE) %>%
+  layout(title = "Boxplots por variable")
+```
+
+Los boxplots muestran que las variables preciom y areaconst presentan mayor dispersión y varios valores atípicos altos, lo que confirma la existencia de viviendas con precios y áreas superiores al comportamiento típico de la muestra. En banios, habitaciones y parqueaderos, la mayoría de las observaciones se concentra en rangos bajos o intermedios, aunque también aparecen algunos casos extremos. En conjunto, el gráfico sugiere distribuciones asimétricas y presencia de valores atípicos, especialmente en la cola superior.
+
+#### Variables cualitativas
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+# Conteos para estrato
+estrato_counts <- base2 %>%
+  filter(!is.na(estrato)) %>%
+  count(estrato) %>%
+  mutate(estrato = as.factor(estrato)) %>%
+  arrange(estrato)
+
+p_estrato <- plot_ly(
+  estrato_counts,
+  x = ~estrato, y = ~n,
+  type = "bar",
+  showlegend = FALSE
+) %>%
+  layout(
+    title = "Frecuencia por estrato (base2)",
+    xaxis = list(title = "Estrato"),
+    yaxis = list(title = "Frecuencia")
+  )
+
+subplot(p_estrato, nrows = 1, shareY = FALSE) %>%
+  layout(title = "Gráfico de barras: estrato (base2)")
+```
+
+El gráfico de barras muestra que en base2 la mayor concentración de viviendas se encuentra en los estratos 4 y 5, siendo el estrato 5 el de mayor frecuencia, seguido muy de cerca por el estrato 4. En contraste, el estrato 3 presenta una participación mucho menor, y el estrato 6 también aparece con una frecuencia inferior a la de los estratos medios-altos. En conjunto, esto indica que la muestra de base2 está compuesta principalmente por viviendas de estratos 4 y 5, lo que sugiere una oferta concentrada en segmentos socioeconómicos medios y altos.
+
+#### Valores atipicos 
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+vars_num <- c("preciom", "areaconst", "banios", "habitaciones", "parqueaderos")
+
+# Función para calcular outliers por IQR (IRC)
+outliers_iqr <- function(x, k = 1.5) {
+  x_no_na <- x[!is.na(x)]
+  q1 <- as.numeric(quantile(x_no_na, 0.25, type = 7))
+  q3 <- as.numeric(quantile(x_no_na, 0.75, type = 7))
+  iqr <- q3 - q1
+  li <- q1 - k * iqr
+  ls <- q3 + k * iqr
+  list(q1 = q1, q3 = q3, iqr = iqr, li = li, ls = ls)
+}
+
+# Resumen por variable
+resumen_atipicos <- lapply(vars_num, function(v) {
+  x <- base2[[v]]
+  stats <- outliers_iqr(x, k = 1.5)
+  idx <- which(!is.na(x) & (x < stats$li | x > stats$ls))
+
+  data.frame(
+    Variable = v,
+    N = sum(!is.na(x)),
+    Q1 = stats$q1,
+    Q3 = stats$q3,
+    IQR = stats$iqr,
+    Limite_inferior = stats$li,
+    Limite_superior = stats$ls,
+    N_atipicos = length(idx),
+    Porc_atipicos = ifelse(sum(!is.na(x)) == 0, NA_real_, 100 * length(idx) / sum(!is.na(x)))
+  )
+}) %>%
+  dplyr::bind_rows() %>%
+  dplyr::mutate(dplyr::across(dplyr::where(is.numeric), ~ round(.x, 2))) %>%
+  dplyr::arrange(dplyr::desc(N_atipicos))
+
+# Mostrar tabla
+knitr::kable(resumen_atipicos, caption = "Outliers por IQR (IRC) - Resumen")
+```
+
+La tabla de outliers por IQR muestra que en base2 todas las variables presentan valores atípicos, aunque con distinta magnitud. La variable con mayor proporción de atípicos es habitaciones, con 925 casos (32.30%), lo que indica una fuerte concentración en un valor central y que cualquier observación diferente queda clasificada fácilmente como atípica bajo este criterio. Le siguen preciom con 229 casos (8.00%), areaconst con 198 (6.91%) y banios con 156 (5.45%), mientras que parqueaderos presenta la menor proporción, con 34 casos (1.41%).
+
+En general, los resultados sugieren que los valores atípicos se concentran principalmente en la parte superior de las distribuciones, especialmente en precio, área y número de baños. En el caso de habitaciones, el hecho de que (Q1 = Q3 = 3) hace que el IQR sea igual a 0, por lo que cualquier valor distinto de 3 se considera atípico, lo que explica su proporción tan alta. En conjunto, esto indica que la muestra contiene una alta homogeneidad en algunas variables, pero también un grupo importante de viviendas con características superiores al valor típico, algo esperable en datos inmobiliarios.
+
+#### Valores faltantes e imputación
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+cols <- c("preciom", "areaconst", "estrato","banios","habitaciones","zona")
+
+tabla_na <- data.frame(
+  columna = cols,
+  n    = sapply(base1[, cols, drop = FALSE], function(x) sum(is.na(x))),
+  porcentaje_na  = round(sapply(vivienda[, cols, drop = FALSE], function(x) mean(is.na(x)) * 100), 2)
+)
+
+# opcional: ordenar de mayor a menor % faltante
+tabla_na <- tabla_na[order(-tabla_na$porcentaje_na), ]
+
+knitr::kable(tabla_na, caption = "Faltantes por columna (n y %)")
+```
+
+De la tabla, se puede mirar que el porcentaje de NA son menores al 2% por lo que primero se va a separar el codigo entre train (80% de los datos) y test (20%). 
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+set.seed(123)
+
+# 1) Partición 80/20
+n <- nrow(base2)
+idx_train <- sample(seq_len(n), size = floor(0.8 * n))
+
+train2 <- base2[idx_train, ]
+test2  <- base2[-idx_train, ]
+
+# 2) Imputación aprendida en train2
+num_vars <- c("areaconst", "banios", "habitaciones", "parqueaderos")
+cat_vars <- c("zona", "estrato")
+
+# Imputación de cuantitativas con mediana
+medianas <- sapply(train2[, num_vars, drop = FALSE], function(x) median(x, na.rm = TRUE))
+
+for (v in num_vars) {
+  train2[[v]][is.na(train2[[v]])] <- medianas[[v]]
+  test2[[v]][is.na(test2[[v]])]   <- medianas[[v]]
+}
+
+# Moda categórica
+moda <- function(x) {
+  x <- x[!is.na(x)]
+  names(sort(table(x), decreasing = TRUE))[1]
+}
+
+modas <- sapply(train2[, cat_vars, drop = FALSE], moda)
+
+for (v in cat_vars) {
+  train2[[v]][is.na(train2[[v]])] <- modas[[v]]
+  test2[[v]][is.na(test2[[v]])]   <- modas[[v]]
+}
+```
+
+### Base2: Paso 3
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+# Asegurar estrato como factor
+train2$estrato <- factor(train2$estrato)
+test2$estrato  <- factor(test2$estrato, levels = levels(train2$estrato))
+
+# Modelo múltiple
+m2 <- lm(preciom ~ areaconst + estrato + habitaciones + parqueaderos + banios, data = train2)
+summary(m2)
+```
+- areaconst:
+
+El coeficiente de areaconst es positivo y estadísticamente significativo, lo que indica que, manteniendo constantes las demás variables, por cada metro cuadrado adicional de área construida, el precio de la vivienda aumenta en promedio 1.4139 millones. Este resultado es coherente con la lógica del mercado inmobiliario, ya que una mayor área construida suele asociarse con un mayor valor del inmueble.
+
+- Estrato:
+
+La variable estrato fue incorporada al modelo como factor, por lo que sus coeficientes se interpretan en comparación con la categoría de referencia, que en este caso es el estrato 3.
+
+Estrato 4: Manteniendo constantes las demás variables, una vivienda en estrato 4 tiene en promedio un precio 32.37 millones más alto que una vivienda en estrato 3. Este efecto es estadísticamente significativo y refleja una diferencia importante en el valor de mercado entre ambos estratos.
+
+Estrato 5: Una vivienda en estrato 5 cuesta en promedio 61.84 millones más que una vivienda en estrato 3, controlando por área construida, habitaciones, parqueaderos y baños. La magnitud de este efecto confirma que, a medida que aumenta el estrato, el precio de la vivienda también se incrementa de manera importante.
+
+Estrato 6: Una vivienda en estrato 6 tiene en promedio un precio 199.75 millones mayor que una vivienda en estrato 3, manteniendo constantes las demás variables. Este es el efecto más alto entre las categorías de estrato y su magnitud es consistente con la realidad del mercado, donde los inmuebles de estratos más altos suelen ubicarse en sectores de mayor valorización y mejores condiciones urbanas.
+
+En conjunto, los resultados muestran que el estrato tiene un impacto positivo, creciente y altamente significativo sobre el precio de la vivienda. Esto sugiere que la localización socioeconómica es un determinante importante del valor del inmueble, incluso controlando por características físicas como área, número de habitaciones, baños y parqueaderos.
+
+- habitaciones:
+
+El coeficiente de habitaciones es negativo y estadísticamente significativo, con un valor de -17.83. Esto indica que, manteniendo constantes las demás variables, cada habitación adicional se asocia con una disminución promedio de 17.83 millones en el precio de la vivienda. Aunque a primera vista este resultado puede parecer contraintuitivo, puede interpretarse como que, manteniendo fija el área construida, un mayor número de habitaciones implica espacios más reducidos o una distribución menos amplia, lo que podría disminuir el valor del inmueble.
+
+- parqueaderos:
+
+El coeficiente de parqueaderos es positivo y altamente significativo. Esto indica que, manteniendo constantes las demás variables, cada parqueadero adicional incrementa el precio promedio de la vivienda en 73.63 millones. Este resultado es coherente con el mercado, ya que disponer de parqueaderos constituye un atributo muy valorado por los compradores y contribuye de forma importante al aumento del valor del inmueble.
+
+- banios:
+
+El coeficiente de banios es positivo y altamente significativo, lo que indica que, manteniendo constantes las demás variables, cada baño adicional aumenta el precio promedio de la vivienda en 37.67 millones. Este hallazgo es lógico, dado que un mayor número de baños suele estar asociado con más comodidad, funcionalidad y una mejor percepción de calidad en la vivienda.
+
+- Interpretación R^2
+
+El coeficiente de determinación del modelo fue (R^2 = 0.7819), lo que indica que el 78.19% de la variabilidad observada en el precio de la vivienda es explicada por las variables incluidas en el modelo: área construida, estrato, número de habitaciones, parqueaderos y baños. En otras palabras, el modelo logra capturar una proporción alta de los cambios en el precio a partir de estas características.
+
+Por su parte, el (R^2) ajustado fue 0.7812, valor muy cercano al (R^2), lo que sugiere que las variables incorporadas aportan información relevante y que el ajuste del modelo no se debe simplemente a la inclusión de más predictores. La pequeña diferencia entre ambos indicadores muestra que el modelo mantiene una capacidad explicativa estable.
+
+En conjunto, estos resultados permiten concluir que el modelo presenta un ajuste alto, adecuado para explicar el comportamiento del precio de las viviendas. Sin embargo, todavía queda un 21.81% de variabilidad sin explicar, posiblemente asociado a otros factores no incluidos, como barrio, ubicación exacta, antigüedad, estado del inmueble, acabados o características adicionales del entorno.
 
 
+#### Discusión del ajuste e implicaciones
+
+El modelo presenta un ajuste alto. El valor de (R^2 = 0.7819) indica que cerca del 78.19% de la variación en el precio de la vivienda es explicada por las variables incluidas, mientras que el (R^2) ajustado de 0.7812 confirma que el conjunto de predictores aporta información real y que el buen desempeño no se debe únicamente al número de variables incorporadas. Además, el estadístico F resultó altamente significativo ((p < 2.2 \times 10^{-16})), lo que muestra que, en conjunto, las variables explicativas mejoran de manera importante la capacidad del modelo para explicar el precio frente a un modelo sin predictores.
+
+Desde el punto de vista práctico, el modelo logra captar una parte importante de la estructura del mercado inmobiliario, especialmente a través de variables como el área construida, el estrato, los baños y los parqueaderos, que resultaron estadísticamente significativas y coherentes con la teoría económica. En particular, el efecto creciente del estrato y el impacto positivo del área, los baños y los parqueaderos confirman que tanto la calidad de la localización como las características físicas del inmueble son determinantes clave en la formación del precio. No obstante, aún queda un 21.81% de variabilidad sin explicar, lo que sugiere que el precio también depende de otros factores que no fueron incluidos en la especificación actual.
+
+Entre las variables que podrían mejorar el modelo se encuentran el barrio, la ubicación exacta dentro de la ciudad, la antigüedad del inmueble, el estado de conservación, los acabados, el piso, la cercanía a servicios, la accesibilidad vial y otras características del entorno urbano. Además, el signo negativo de la variable habitaciones podría indicar que existen relaciones más complejas entre la distribución interna del espacio y el precio, por lo que valdría la pena explorar posibles no linealidades o interacciones, por ejemplo entre área construida y número de habitaciones, o entre área y estrato.
+
+Para mejorar el ajuste y la capacidad predictiva del modelo, una primera alternativa es incorporar variables adicionales de localización, como barrio, zona o incluso coordenadas geográficas. También sería útil explorar transformaciones, por ejemplo usar (\log(preciom)) y/o (\log(areaconst)), ya que en datos inmobiliarios suele haber asimetría y presencia de heterocedasticidad. Otra posibilidad es evaluar términos de interacción o relaciones no lineales, especialmente si se sospecha que el efecto del área cambia según el estrato o que el impacto de ciertas características no es estrictamente lineal. Finalmente, si en los diagnósticos del modelo se detectan problemas como heterocedasticidad o falta de normalidad, conviene comparar esta especificación con modelos alternativos, usar errores estándar robustos o considerar enfoques más flexibles que fortalezcan tanto la inferencia como la predicción.
+
+### Base2: Paso 4
+
+#### Normalidad de los errores
+
+Para evaluar el supuesto, se utiliza el QQ-Plot de los residuos estandarizados (comparando los cuantiles empíricos con los cuantiles teóricos normales) y un histograma de los residuos. Posteriormente, se complementa la evaluación visual con el test de D’Agostino (`dagotest`) aplicado a los residuos del modelo.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+## Normalidad de los errores (residuos) del modelo m2
+
+# 1) Residuos y residuos estandarizados
+residuos2 <- residuals(m2)
+residuales_estandarizados2 <- rstandard(m2)
+
+# 2) QQ-Plot
+par(mfrow = c(1,1))
+par(mar = c(5, 4, 3, 1))
+
+qqnorm(residuales_estandarizados2,
+       main = "QQ-Plot de los residuales estandarizados",
+       col = "blue")
+qqline(residuales_estandarizados2, col = "red", lwd = 2)
+
+# 3) Histograma de residuos con curva normal ajustada
+hist(residuos2, breaks = 50, freq = FALSE, col = "lightblue",
+     main = "Histograma de los residuos", xlab = "Residuos")
+
+curve(dnorm(x, mean = mean(residuos2, na.rm = TRUE), sd = sd(residuos2, na.rm = TRUE)),
+      col = "red", lwd = 2, add = TRUE)
+
+```
+
+
+En el QQ-plot de los residuales estandarizados se observa que los puntos se apartan de manera importante de la recta teórica, especialmente en ambos extremos. En la parte central los residuos siguen una trayectoria relativamente cercana a la línea, pero en las colas se presentan desviaciones marcadas, lo que sugiere colas pesadas y presencia de valores extremos. Esto indica que el supuesto de normalidad no se cumple de forma estricta.
+
+El histograma de los residuos muestra una distribución concentrada alrededor de cero, pero con una forma más picuda y colas más largas que la curva normal superpuesta. Aunque visualmente la parte central recuerda una distribución aproximadamente simétrica, la comparación con la curva normal evidencia que los residuos no siguen bien la forma teórica normal, especialmente por la influencia de observaciones extremas.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+
+# 4) Test de normalidad de D'Agostino
+# H0: residuos - Normal
+# H1: residuos no - Normal
+fBasics::dagoTest(residuos2)
+```
+El test de normalidad de D’Agostino arrojó un estadístico (\chi^2 = 1027.5895) y un valor-p inferior a (2.2 \times 10^{-16}). Dado que el valor-p es mucho menor que 0.05, se rechaza la hipótesis nula de normalidad, por lo que se concluye que los residuos del modelo no siguen una distribución normal.
+
+Además, tanto la prueba de asimetría como la de curtosis resultaron también significativas, con valores-p inferiores a (2.2 \times 10^{-16}). Esto indica que la falta de normalidad se debe tanto a una asimetría importante como a una curtosis elevada, es decir, a una distribución con colas más pesadas y presencia de valores extremos en comparación con la distribución normal.
+
+En conjunto, estos resultados confirman lo observado en el QQ-plot y en el histograma: los errores del modelo no cumplen el supuesto de normalidad. Por tanto, conviene considerar transformaciones en la variable respuesta, como (\log(preciom)) ya que en datos inmobiliarios es común encontrar asimetría positiva y valores extremos que afectan la normalidad. También puede explorarse la transformación de variables explicativas continuas, como el área construida, si presentan distribuciones muy sesgadas.
+
+Tambien, conviene revisar la presencia de observaciones atípicas o influyentes, ya que unos pocos casos extremos pueden alterar fuertemente la distribución de los residuos. Para ello pueden usarse medidas como residuos estudentizados, leverage o distancia de Cook. Asimismo, sería útil evaluar si la especificación del modelo es suficientemente completa, incorporando variables adicionales como barrio, ubicación exacta, tipo de vivienda, piso, antigüedad o estado del inmueble, ya que la omisión de variables relevantes también puede generar desviaciones de normalidad.
+
+Otra posibilidad es explorar relaciones no lineales o interacciones entre variables, por ejemplo entre área construida y estrato, si se sospecha que el efecto de una variable depende del nivel de otra. Finalmente, si el interés principal es la inferencia estadística y no se logra corregir la no normalidad, conviene apoyarse en métodos más robustos, como errores estándar robustos o procedimientos bootstrap, que permiten obtener conclusiones más confiables aun cuando los residuos no sean normales.
+
+#### Los errores tienen media E[e]=0
+
+Se visualiza la distribución de los residuos para tener una estimacion de su comportamiento y verificar si estan centrados en cero.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+plot(residuos2, type = "p", col = "blue",
+     main = "Residuos vs Observaciones",
+     ylab = "Residuos", xlab = "Índice")
+abline(h = 0, col = "red", lwd = 2)
+```
+El gráfico de residuos vs observaciones muestra que los errores se distribuyen en torno a la línea horizontal en cero, sin una tendencia creciente o decreciente claramente marcada a lo largo del índice. Esto sugiere que, en promedio, el modelo no presenta un sesgo sistemático fuerte de sobreestimación o subestimación. Sin embargo, también se observan varios residuos extremos, tanto positivos como negativos, y cierta variabilidad desigual en algunos tramos, lo que indica la presencia de observaciones atípicas y posible heterogeneidad en la dispersión de los errores.
+
+En consecuencia, aunque los residuos parecen estar centrados alrededor de cero, el gráfico también sugiere que el modelo podría mejorarse. Una primera alternativa es revisar observaciones influyentes o atípicas mediante residuos estudentizados, leverage o distancia de Cook. También conviene explorar transformaciones como (\log(preciom)) o (\log(areaconst)), que pueden ayudar a reducir asimetrías y estabilizar la varianza. Además, podría ser útil incorporar variables adicionales de localización o calidad del inmueble, así como evaluar posibles interacciones o relaciones no lineales, con el fin de capturar mejor la estructura de los datos y reducir la dispersión residual.
+
+#### Los errores tienen varianza constante V[e] = σ^2
+
+Realizamos un gráfico para observar el comportamiento de la varianza de los residuos frente a los valores ajustados, con el fin de verificar visualmente si se cumple el supuesto de homocedasticidad (varianza constante) o si, por el contrario, se presenta heterocedasticidad.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+# 1. Gráfico de residuos vs valores ajustados
+ajustados2 <- fitted(m2)
+
+plot(ajustados2, residuos2,
+     col = "green",              # color de los puntos
+     pch = 19,                  # tipo de punto sólido
+     main = "Residuos vs Valores Ajustados",
+     xlab = "Valores Ajustados",
+     ylab = "Residuos")
+# Línea de referencia en 0
+abline(h = 0, col = "red", lwd = 2)
+```
+El gráfico de residuos vs valores ajustados muestra que la dispersión de los residuos no permanece constante a lo largo del rango de valores predichos. En los valores ajustados bajos y medios la variabilidad es relativamente menor, mientras que para valores ajustados altos la dispersión aumenta de forma notable, formando un patrón de abanico. Este comportamiento sugiere evidencia de heterocedasticidad, es decir, que la varianza de los errores no es constante.
+
+Además, se observan varios residuos extremos, especialmente en la parte derecha del gráfico, lo que indica que el modelo comete errores más grandes al predecir viviendas de mayor valor. En conjunto, el gráfico sugiere que el supuesto de homocedasticidad no se cumple completamente, por lo que conviene complementar esta evidencia visual con una prueba formal, como Breusch–Pagan, y considerar posibles transformaciones o ajustes del modelo.
+
+Para contrastar lo que nos indica el gráfico de la varianza, vamos aplicar el test de Breusch-Pagan.
+
+```{r echo = TRUE, message = FALSE, warning = FALSE}
+bptest(m2)
+```
+La prueba de Breusch–Pagan arrojó un estadístico (BP = 756.35) con 7 grados de libertad y un valor-p inferior a (2.2 \times 10^{-16}). Dado que el valor-p es mucho menor que 0.05, se rechaza la hipótesis nula de homocedasticidad. En consecuencia, existe evidencia estadísticamente significativa de heterocedasticidad en los residuos del modelo.
+
+Este resultado indica que la varianza de los errores no es constante a lo largo de los distintos niveles de valores ajustados, lo cual coincide con lo observado en el gráfico de residuos vs valores ajustados. Por tanto, el supuesto de homocedasticidad no se cumple, y conviene considerar transformaciones como (\log(preciom)). 
+
+Puede aplicarse una transformación a la variable respuesta, como (\log(preciom)), ya que en datos inmobiliarios esto suele ayudar a estabilizar la varianza y reducir la influencia de valores extremos. También podría evaluarse la transformación de variables explicativas continuas, como el área construida, si presentan asimetría o escalas muy amplias.
+
+En segundo lugar, conviene revisar la especificación del modelo, incorporando variables adicionales que puedan estar explicando parte de la variabilidad del precio, como barrio, ubicación exacta, antigüedad, tipo de vivienda, piso o características del entorno. La omisión de variables relevantes puede contribuir a que la varianza de los errores no sea constante. Asimismo, puede explorarse la inclusión de interacciones o relaciones no lineales, por ejemplo entre área construida y estrato, si se sospecha que el efecto del tamaño cambia según el nivel socioeconómico.
+
+#### Los errores son mutuamente independientes
+
+A continuacion se procede a hacer el grafico:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+plot(resid(m2), type = "l",
+     main = "Residuos vs Observaciones",
+     xlab = "Observaciones",
+     ylab = "Residuos estandarizados")
+abline(h = 0, col = "red")
+```
+
+El gráfico de residuos vs observaciones muestra que los errores se mantienen, en general, alrededor de la línea horizontal en cero, sin una tendencia sistemática clara a lo largo del índice. Esto sugiere que no hay evidencia visual fuerte de dependencia entre observaciones consecutivas y que, en promedio, el modelo no presenta un sesgo sistemático de sobreestimación o subestimación.
+
+No obstante, también se observan varios picos pronunciados, tanto positivos como negativos, que indican la presencia de residuos extremos en algunas observaciones. Estos casos sugieren que, aunque la mayor parte de los errores fluctúa cerca de cero, existen viviendas para las cuales el modelo comete errores considerables. En conjunto, el gráfico es consistente con un comportamiento relativamente aleatorio de los residuos, aunque conviene complementar esta evaluación visual con una prueba formal, como la de Durbin–Watson, para verificar con mayor precisión el supuesto de independencia.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+dwtest(m2)
+```
+La prueba de Durbin–Watson arrojó un estadístico (DW = 1.9511) y un valor-p de 0.1209. Dado que el valor-p es mayor que 0.05, no se rechaza la hipótesis nula de independencia de los errores. En consecuencia, el supuesto de independencia de los errores parece cumplirse razonablemente en este modelo. Este resultado también es coherente con lo observado en el gráfico de residuos vs observaciones, donde no se apreciaba un patrón sistemático claro a lo largo del índice.
+
+### Base2: Paso 5
+
+Con el modelo identificado, se predice el el precio de la vivienda.
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# 1. Predicción sobre el set de prueba
+pred_test <- predict(m2, newdata = test2)
+
+# 2. Comparación real vs predicho en test
+resultados_test <- data.frame(
+  Real = test2$preciom,
+  Predicho = pred_test
+)
+
+head(resultados_test)
+
+```
+Al hacer filtro con las caracteristicas de la primera solicitud
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+solicitud2_e5 <- data.frame(
+  areaconst = 300,
+  estrato = factor(5, levels = levels(train$estrato)),
+  habitaciones = 5,
+  parqueaderos = 3,
+  banios = 3
+)
+
+solicitud2_e6 <- data.frame(
+  areaconst = 300,
+  estrato = factor(6, levels = levels(train$estrato)),
+  habitaciones = 5,
+  parqueaderos = 3,
+  banios = 3
+)
+
+pred_e5 <- predict(m1, newdata = solicitud2_e5)
+pred_e6 <- predict(m1, newdata = solicitud2_e6)
+
+pred_e5
+pred_e6
+```
+Para la segunda solicitud, el modelo estimó un precio de 508.30 millones de pesos cuando la vivienda pertenece a estrato 5 y de 731.37 millones de pesos cuando pertenece a estrato 6. Estos resultados muestran nuevamente que el estrato tiene un efecto importante sobre el valor estimado del inmueble, aun manteniendo constantes el área construida, el número de habitaciones, baños y parqueaderos.
+
+Al comparar estas predicciones con el crédito preaprobado máximo de 850 millones, se observa que ambas alternativas se encuentran dentro del presupuesto disponible. En consecuencia, tanto la opción en estrato 5 como la de estrato 6 serían financieramente viables según el modelo ajustado. No obstante, la vivienda en estrato 5 presenta un precio estimado considerablemente menor, por lo que podría representar una opción más conveniente si se busca optimizar el presupuesto, mientras que la alternativa en estrato 6 implicaría un mayor nivel de valorización y ubicación socioeconómica dentro de un rango aún accesible para el cliente.
+
+### Base2: Paso 6
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# 1. Copia de la base
+datos <- vivienda
+
+# 2. Asegurar que estrato tenga el mismo formato que en el modelo
+datos$estrato <- factor(datos$estrato, levels = levels(train$estrato))
+
+# 3. Crear la segunda solicitud
+segunda_solicitud <- data.frame(
+  areaconst = 300,
+  estrato = factor(5, levels = levels(train$estrato)),
+  habitaciones = 5,
+  banios = 3,
+  parqueaderos = 3
+)
+
+# 4. Predecir precio para todas las viviendas
+datos$precio_predicho <- predict(m1, newdata = datos)
+
+# 5. Filtrar viviendas dentro del crédito máximo
+ofertas_posibles <- datos %>%
+  filter(
+    precio_predicho <= 850,
+    !is.na(longitud),
+    !is.na(latitud)
+  )
+
+# 6. Variables para medir similitud
+vars <- c("areaconst", "estrato", "habitaciones", "banios", "parqueaderos")
+
+# Convertir a numérico para calcular distancias
+ofertas_posibles[, vars] <- lapply(ofertas_posibles[, vars], function(x) as.numeric(as.character(x)))
+segunda <- segunda_solicitud[, vars]
+segunda <- lapply(segunda, function(x) as.numeric(as.character(x)))
+segunda <- as.data.frame(segunda)
+
+# 7. Calcular distancia euclidiana al perfil solicitado
+distancia <- apply(ofertas_posibles[, vars], 1, function(x) {
+  sum((x - segunda[1, ])^2)
+})
+
+ofertas_posibles$distancia <- distancia
+
+# 8. Seleccionar las 5 ofertas más similares
+top5_ofertas <- ofertas_posibles %>%
+  arrange(distancia) %>%
+  slice(1:5)
+
+# 9. Ver tabla resumen
+knitr::kable(
+  top5_ofertas %>%
+    select(barrio, zona, estrato, areaconst, habitaciones, banios,
+           parqueaderos, preciom, precio_predicho, distancia),
+  caption = "Top 5 ofertas potenciales para la solicitud 2"
+)
+
+# 10. Agrupar por ubicación en caso de coordenadas repetidas
+top5_ofertas_agrupadas <- top5_ofertas %>%
+  group_by(longitud, latitud) %>%
+  summarise(
+    popup = paste(
+      sapply(1:n(), function(i) paste0(
+        "<b>Oferta:</b> ", i,
+        "<br><b>Barrio:</b> ", barrio[i],
+        "<br><b>Zona:</b> ", zona[i],
+        "<br><b>Estrato:</b> ", estrato[i],
+        "<br><b>Área:</b> ", areaconst[i],
+        "<br><b>Habitaciones:</b> ", habitaciones[i],
+        "<br><b>Baños:</b> ", banios[i],
+        "<br><b>Parqueaderos:</b> ", parqueaderos[i],
+        "<br><b>Precio observado:</b> ", round(preciom[i], 2),
+        "<br><b>Precio predicho:</b> ", round(precio_predicho[i], 2)
+      )),
+      collapse = "<hr>"
+    ),
+    .groups = "drop"
+  )
+
+# 11. Mapa de ofertas potenciales
+leaflet(top5_ofertas_agrupadas) %>%
+  addTiles() %>%
+  addMarkers(
+    lng = ~longitud,
+    lat = ~latitud,
+    popup = ~popup
+  )
+```
+
+Se identificaron cinco ofertas potenciales para la segunda solicitud, todas ubicadas en la Zona Sur y con precios predichos por debajo del presupuesto máximo de 850 millones. Las viviendas seleccionadas comparten características similares a las requeridas, especialmente en área construida y estrato, aunque presentan algunas variaciones en el número de habitaciones, baños y parqueaderos. En conjunto, estas opciones constituyen alternativas viables y razonablemente cercanas al perfil solicitado, por lo que pueden considerarse buenas candidatas para recomendar al cliente.
